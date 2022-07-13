@@ -1,0 +1,20 @@
+# training
+epochs: 500
+decoder_max_step: 3000
+
+random_seed: False
+
+batch_size: 8
+learning_rate: 1.0e-3
+weight_decay: 1.0e-6
+grad_clip_thresh: 1.0
+
+cache_dataset: True
+use_cuda_if_available: True
+
+balanced_sampling: False
+
+# vocoder
+vocoder_state_path: pretrained/hifigan-universal-v1/g_02500000
+vocoder_config_path: pretrained/hifigan-universal-v1/config.json
+

@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TTS Arabic</title>
+    <link rel="icon" type="image/png" href="favicon.png">
+    <script src="static/mappings.js"></script>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 1.6rem;
+        font-weight: 600;
+        color: #111;
+        font-family: Cambria, Cochin, Georgia, Times, 'Times New Roman', serif
+      }
+
+      header {
+        height: 3rem;
+        border-bottom: 1px solid black;
+        margin-bottom: 4.5rem;
+        padding-left: 0.5rem;
+      }
+
+      main {
+        width: 38rem;
+        margin: auto;
+      }
+
+      label {
+        font-size: 1.5rem;
+        margin-bottom: 0.18rem;
+      }
+
+      textarea {   
+        height: 7rem;
+        border: 2px solid #aaa;
+        border-radius: 3px;
+      }
+
+      #ta-arabic {   
+        font-family:'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
+        font-size: 1.9rem;
+      }
+
+      #ta-buckw {
+        font-family: 'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
+        font-size: 1.5rem;
+      }
+
+      #audio-output {
+        width: 38rem;
+        height: 2.2rem;
+      }
+
+      #para-phonemes {
+        font-family: Verdana, Geneva, Tahoma, sans-serif;
+        margin: 0.5rem;
+        font-size: 1.3rem;
+        width: 38rem;
+      }
+
+      .ta-container {
+        display: flex;
+        flex-direction: column;
+        margin: auto;
+      }
+
+      button {
+        display: flex;
+        justify-content: center;
+        align-items: center;     
+        font-weight: 600;
+        font-size: 1rem;
+        background-color: white;
+        border-radius: 3px;
+        margin-top: 0.2rem;
+        width: 4.8rem;
+        height: 2rem;
+        border: 2px solid #888;    
+        cursor: pointer;
+      }
+
+      button svg {
+        fill: #555;
+      }
+
+      button:hover,
+      button:active {
+        box-shadow: 0 0 1px 1px rgba(0, 0, 0, 0.26);
+      }
+
+      .control-bar {
+        display: flex;
+        justify-content: right;
+        align-items: center;
+      }
+
+      .control-bar input {
+        height: 1.5rem;
+        width: 3rem;
+        margin-right: 0.5rem;       
+      }
+
+      .control-bar label {
+        color: #555;
+        font-size: 1.2rem;
+        margin-right: 0.3rem;
+      }
+
+    </style>
+  </head>
+
+  <!-- BODY -->
+  <body>
+    <header><h1>TTS Tacotron2 Arabic</h1></header>
+    <main>
+      <div class="ta-container">
+        <label for="ta-arabic">Arabic</label>
+        <textarea
+          id="ta-arabic"
+          dir="rtl"
+          oninput="taArabicChanged()"
+        ></textarea>
+      </div>
+
+      <br />
+      <div class="ta-container">
+        <label for="ta-buckw">Buckwalter</label>
+        <textarea id="ta-buckw" spellcheck="false" oninput="taBuckwChanged()"></textarea>
+      </div>
+
+      <div class="control-bar">
+        <label for="speed-input">Speed:</label>
+        <input id="speed-input" type="number" value="1.0" step="0.1"/>
+        <button onclick="tts(event)">
+          <svg xmlns="http://www.w3.org/2000/svg" height="24" width="24"><path d="M4 22q-.825 0-1.412-.587Q2 20.825 2 20V4q0-.825.588-1.413Q3.175 2 4 2h9l-2 2H4v16h11v-3h2v3q0 .825-.587 1.413Q15.825 22 15 22Zm2-4v-2h7v2Zm0-3v-2h5v2Zm9 0-4-4H8V6h3l4-4Zm2-3.05v-6.9q.9.525 1.45 1.425.55.9.55 2.025t-.55 2.025q-.55.9-1.45 1.425Zm0 4.3v-2.1q1.75-.625 2.875-2.163Q21 10.45 21 8.5q0-1.95-1.125-3.488Q18.75 3.475 17 2.85V.75q2.6.675 4.3 2.812Q23 5.7 23 8.5t-1.7 4.938q-1.7 2.137-4.3 2.812Z"/></svg>TTS
+        </button>
+      </div>
+
+
+      <br />
+
+      <label for="para-phonemes">Phonetic</label>
+      <p id="para-phonemes"></p>
+
+      <audio id="audio-output" src="static/wave.wav" controls>Play</audio>
+    </main>
+
+    <!-- SCRIPT -->
+    <script>
+      const taArabic = document.getElementById("ta-arabic");
+      const taBuckw = document.getElementById("ta-buckw");
+      const inputSpeed = document.getElementById("speed-input");
+      const audioOut = document.getElementById("audio-output");
+      const phonemesOut = document.getElementById("para-phonemes");
+
+      audioOut.volume = 0.5;
+
+      let outputIdx = 0;
+
+      const taArabicChanged = () => {
+        const buckw = [...taArabic.value]
+          .map((ar) => {
+            if (ar in arabicToBuckw) {
+              return arabicToBuckw[ar];
+            }
+            return ar;
+          })
+          .join("");
+        taBuckw.value = buckw;
+      };
+
+      const taBuckwChanged = () => {
+        const arabic = [...taBuckw.value]
+          .map((lat) => {
+            if (lat in buckwToArabic) {
+              return buckwToArabic[lat];
+            }
+            return lat;
+          })
+          .join("");
+        taArabic.value = arabic;
+      };
+
+      const tts = async () => {
+        const response = await fetch("/api/tts", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ 
+            buckw: taBuckw.value,
+            rate: inputSpeed.value,
+            }),
+        });
+        const data = await response.json();
+        phonemesOut.textContent = data.phonemes;
+        console.log(data);
+        outputIdx++;
+        audioOut.src = `static/wave.wav?${outputIdx}`;        
+        audioOut.play();        
+      };
+    </script>
+  </body>
+</html>
