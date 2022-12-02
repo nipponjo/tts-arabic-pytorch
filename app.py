@@ -10,9 +10,11 @@ from utils.app_utils import TTSManager
 
 app = FastAPI()
 
-tts_manager = TTSManager(
-    './pretrained/tacotron2_ar.pth', 'app/static')
+# tts_manager = TTSManager(
+#     './pretrained/tacotron2_ar_mse.pth', 'app/static')
 
+tts_manager = TTSManager(
+    './pretrained/tacotron2_ar_adv.pth', 'app/static')
 
 class TTSRequest(BaseModel):
     buckw: str

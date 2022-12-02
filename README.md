@@ -1,6 +1,6 @@
 # tts-arabic-tacotron2
 
-Tacotron2 from `torchaudio`, trained on Nawar Halabi's [Arabic Speech Corpus](http://en.arabicspeechcorpus.com/), including the [HiFi-GAN vocoder](https://github.com/jik876/hifi-gan) for direct TTS inference.
+Tacotron2 (PyTorch/torchaudio), trained on Nawar Halabi's [Arabic Speech Corpus](http://en.arabicspeechcorpus.com/), including the [HiFi-GAN vocoder](https://github.com/jik876/hifi-gan) for direct TTS inference.
 
 ![tts](https://user-images.githubusercontent.com/28433296/178712707-264d1310-4162-4f34-b336-56e6be944e2d.png)
 
@@ -22,7 +22,9 @@ Required packages:
 
 ~ for the demo app: `fastapi "uvicorn[standard]"`
 
-Download the pretrained weights for the Tacotron2 model ([link](https://drive.google.com/u/1/uc?id=18a20eVu0bLlws7h3TA0xZse68aSr7Bg9&export=download)).
+The model was trained with the mse loss as described in the paper. I also trained the model using an additional adversarial loss (adv). The difference is not large, but I think that the (adv) version often sounds a bit clearer. You can compare them yourself.
+
+Download the pretrained weights for the Tacotron2 model ([mse](https://drive.google.com/u/0/uc?id=1GCu-ZAcfJuT5qfzlKItcNqtuVNa7CNy9&export=download) | [adv](https://drive.google.com/u/0/uc?id=1FusCFZIXSVCQ9Q6PLb91GIkEnhn_zWRS&export=download)).
 
 Download the [HiFi-GAN vocoder](https://github.com/jik876/hifi-gan) weights and config file ([direct link](https://drive.google.com/drive/folders/1YuOoV3lO2-Hhn1F2HJ2aQ4S0LC1JdKLd)). Either put them into `pretrained/hifigan-universal-v1` or edit the following lines in `configs/basic.yaml`.
 
@@ -34,7 +36,7 @@ vocoder_config_path: pretrained/hifigan-universal-v1/config.json
 
 ## Using the model
 
-This repo uses the [Tacotron2](https://pytorch.org/audio/stable/models.html#tacotron2) model from `torchaudio.models`. The `Tacotron2` from `model.networks` wraps the model in order to simplify text-to-mel inference. The `Tacotron2Wave` model includes the [HiFi-GAN vocoder](https://github.com/jik876/hifi-gan) for direct text-to-speech inference.
+The `Tacotron2` from `model.networks` is a wrapper that simplifies text-to-mel inference. The `Tacotron2Wave` model includes the [HiFi-GAN vocoder](https://github.com/jik876/hifi-gan) for direct text-to-speech inference.
 
 ## Inferring the Mel spectrogram
 
@@ -75,7 +77,7 @@ wave_list = model.tts(["Sifr", "wAHid", "<i^nAn", "^alA^ap", ">arbaEap", "xamsap
 ```bash
 python inference.py
 # default parameters:
-python inference.py --list data/infer_text.txt --checkpoint pretrained/tacotron2_ar.pth --out_dir samples/results --batch_size 8 --speed 1
+python inference.py --list data/static_text.txt --checkpoint pretrained/tacotron2_ar.pth --out_dir samples/results --batch_size 8 --speed 1
 ```
 
 ## Testing the model

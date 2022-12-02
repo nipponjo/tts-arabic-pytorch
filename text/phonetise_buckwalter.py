@@ -176,6 +176,8 @@ def preprocess_utterance(utterance):
     utterance = utterance.replace('a~', '~a') 
     utterance = utterance.replace('u~', '~u')
 
+    utterance = utterance.replace('lA~a', 'l~aA')
+
     # Deal with Hamza types that when not followed by a short vowel letter,
     # this short vowel is added automatically
     utterance = re.sub(u'Ai', u'<i', utterance)

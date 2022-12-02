@@ -8,7 +8,7 @@ import utils.make_html as html
 from utils.plotting import get_alignment_figure, get_spectrogram_figure
 from vocoder import load_hifigan
 from utils import get_basic_config
-
+from model.tacotron2_ms import Tacotron2MS
 
 def test(args, text_arabic):
 
@@ -19,7 +19,7 @@ def test(args, text_arabic):
     sample_rate = 22_050
 
     # Load tacotron2 model
-    model = torchaudio.models.Tacotron2(n_symbol=40)
+    model = Tacotron2MS(n_symbol=40)
     model_state_dict = torch.load(args.checkpoint)['model']
     model.load_state_dict(model_state_dict)
     print(f'Loaded tacotron2 from: {args.checkpoint}')
@@ -75,7 +75,7 @@ def test(args, text_arabic):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '--checkpoint', default='pretrained/tacotron2_ar.pth')
+        '--checkpoint', default='pretrained/tacotron2_ar_adv.pth')
     parser.add_argument('--out_dir', default='samples/test')
     args = parser.parse_args()
 

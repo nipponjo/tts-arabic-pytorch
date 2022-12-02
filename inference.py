@@ -62,7 +62,7 @@ def main():
     parser.add_argument(
         '--list', type=str, default='./data/infer_text.txt')
     parser.add_argument(
-        '--checkpoint', type=str, default='pretrained/tacotron2_ar.pth')
+        '--checkpoint', type=str, default='pretrained/tacotron2_ar_adv.pth')
     parser.add_argument('--out_dir', type=str, default='samples/results')
     parser.add_argument('--speed', type=float, default=1.0)
     parser.add_argument('--batch_size', type=int, default=8)

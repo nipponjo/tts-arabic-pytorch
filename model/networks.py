@@ -3,7 +3,8 @@ from typing import List, Union
 import text
 import torch
 import torch.nn as nn
-import torchaudio
+from model.tacotron2_ms import Tacotron2MS
+
 from text.symbols import EOS_TOKENS, SEPARATOR_TOKEN
 from utils import get_basic_config
 from vocoder import load_hifigan
@@ -62,7 +63,8 @@ def resize_mel(mel: torch.Tensor,
     return mel_res
 
 
-class Tacotron2(torchaudio.models.Tacotron2):
+
+class Tacotron2(Tacotron2MS):
     def __init__(self,
                  checkpoint: str = None,
                  n_symbol: int = 40,
@@ -105,6 +107,7 @@ class Tacotron2(torchaudio.models.Tacotron2):
     @torch.inference_mode()
     def ttmel_single(self,
                      utterance: str,
+                     speaker_id: int = 0,
                      postprocess_mel: bool = True):
 
         tokens = self._tokenize(utterance)
@@ -116,9 +119,10 @@ class Tacotron2(torchaudio.models.Tacotron2):
 
         token_ids = text.tokens_to_ids(tokens)
         ids_batch = torch.LongTensor(token_ids).unsqueeze(0).to(self.device)
+        sid = torch.LongTensor([speaker_id]).to(self.device)
 
         # Infer spectrogram and wave
-        mel_spec, _, alignments = self.infer(ids_batch)
+        mel_spec, _, alignments = self.infer(ids_batch, sid)
         mel_spec = mel_spec[0]
         if process_mel:
             mel_spec = truncate_mel(mel_spec, alignments[0, :, -self.n_eos-1])
@@ -128,6 +132,7 @@ class Tacotron2(torchaudio.models.Tacotron2):
     @torch.inference_mode()
     def ttmel_batch(self,
                     batch: List[str],
+                    speaker_id: int = 0,
                     postprocess_mel: bool = True):
 
         batch_tokens = [self._tokenize(line) for line in batch]
@@ -153,7 +158,9 @@ class Tacotron2(torchaudio.models.Tacotron2):
         batch_ids_padded = batch_ids_padded.to(self.device)
         batch_lens_sorted = batch_lens_sorted.to(self.device)
 
-        y_pred = self.infer(batch_ids_padded, batch_lens_sorted)
+        batch_sids = batch_lens_sorted*0 + speaker_id
+
+        y_pred = self.infer(batch_ids_padded, batch_sids, batch_lens_sorted)
         mel_outputs_postnet, mel_specgram_lengths, alignments = y_pred
 
         mel_list = []
@@ -173,11 +180,12 @@ class Tacotron2(torchaudio.models.Tacotron2):
 
     def ttmel(self,
               text_buckw: Union[str, List[str]],
+              speaker_id: int = 0,
               batch_size: int = 8,
               postprocess_mel: bool = True):
         # input: string
         if isinstance(text_buckw, str):
-            return self.ttmel_single(text_buckw, postprocess_mel)
+            return self.ttmel_single(text_buckw, speaker_id, postprocess_mel)
 
         # input: list
         assert isinstance(text_buckw, list)
@@ -186,20 +194,20 @@ class Tacotron2(torchaudio.models.Tacotron2):
 
         if batch_size == 1:
             for sample in batch:
-                mel = self.ttmel_single(sample, postprocess_mel)
+                mel = self.ttmel_single(sample, speaker_id, postprocess_mel)
                 mel_list.append(mel)
             return mel_list
 
         # infer one batch
         if len(batch) <= batch_size:
-            return self.ttmel_batch(batch, postprocess_mel)
+            return self.ttmel_batch(batch, speaker_id, postprocess_mel)
 
         # batched inference
         batches = [batch[k:k+batch_size]
                    for k in range(0, len(batch), batch_size)]
 
         for batch in batches:
-            mels = self.ttmel_batch(batch, postprocess_mel)
+            mels = self.ttmel_batch(batch, speaker_id, postprocess_mel)
             mel_list += mels
 
         return mel_list
@@ -237,11 +245,12 @@ class Tacotron2Wave(nn.Module):
     @torch.inference_mode()
     def tts_single(self,
                    text_buckw: str,
+                   speaker_id: int = 0,
                    speed: Union[int, float, None] = None,
                    postprocess_mel=True,
                    return_mel=False):
 
-        mel_spec = self.model.ttmel_single(text_buckw, postprocess_mel)
+        mel_spec = self.model.ttmel_single(text_buckw, speaker_id, postprocess_mel)
         if speed is not None:
             mel_spec = resize_mel(mel_spec, rate=speed)
 
@@ -255,11 +264,12 @@ class Tacotron2Wave(nn.Module):
     @torch.inference_mode()
     def tts_batch(self,
                   batch: List[str],
+                  speaker_id: int = 0,
                   speed: Union[int, float, None] = None,
                   postprocess_mel=True,
                   return_mel=False):
 
-        mel_list = self.model.ttmel_batch(batch, postprocess_mel)
+        mel_list = self.model.ttmel_batch(batch, speaker_id, postprocess_mel)
 
         wav_list = []
         for mel in mel_list:
@@ -276,14 +286,16 @@ class Tacotron2Wave(nn.Module):
 
     def tts(self,
             text_buckw: Union[str, List[str]],
-            batch_size: int = 8,
+            speaker_id: int = 0,
+            batch_size: int = 8,            
             speed: Union[int, float, None] = None,
             postprocess_mel: bool = True,
             return_mel: bool = False):
 
         # input: string
         if isinstance(text_buckw, str):
-            return self.tts_single(text_buckw, speed=speed,
+            return self.tts_single(text_buckw, speaker_id=speaker_id, 
+                                   speed=speed,
                                    postprocess_mel=postprocess_mel,
                                    return_mel=return_mel)
 
@@ -294,7 +306,8 @@ class Tacotron2Wave(nn.Module):
 
         if batch_size == 1:
             for sample in batch:
-                wav = self.tts_single(sample, speed=speed,
+                wav = self.tts_single(sample, speaker_id=speaker_id,
+                                      speed=speed,
                                       postprocess_mel=postprocess_mel,
                                       return_mel=return_mel)
                 wav_list.append(wav)
@@ -302,7 +315,8 @@ class Tacotron2Wave(nn.Module):
 
         # infer one batch
         if len(batch) <= batch_size:
-            return self.tts_batch(batch, speed=speed,
+            return self.tts_batch(batch, speaker_id=speaker_id,
+                                  speed=speed,
                                   postprocess_mel=postprocess_mel,
                                   return_mel=return_mel)
 
@@ -311,7 +325,8 @@ class Tacotron2Wave(nn.Module):
                    for k in range(0, len(batch), batch_size)]
 
         for batch in batches:
-            wavs = self.tts_batch(batch, speed=speed,
+            wavs = self.tts_batch(batch,  speaker_id=speaker_id,
+                                  speed=speed,
                                   postprocess_mel=postprocess_mel,
                                   return_mel=return_mel)
             wav_list += wavs

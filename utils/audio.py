@@ -23,9 +23,10 @@ class MelSpectrogram(nn.Module):
 
         self.pad_length = int((n_fft - hop_length)/2)
 
-        mel_basis = torch.Tensor(librosa_mel_fn(sample_rate,
-                                                n_fft, n_mels,
-                                                f_min, f_max, norm=norm))
+        mel_basis = torch.Tensor(librosa_mel_fn(sr=sample_rate,
+                                                n_fft=n_fft, n_mels=n_mels,
+                                                fmin=f_min, fmax=f_max, 
+                                                norm=norm))
         window_fn = torch.hann_window(win_length)
         self.register_buffer('mel_basis', mel_basis)
         self.register_buffer('window_fn', window_fn)

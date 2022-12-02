@@ -7,7 +7,8 @@ tb_logs/
 node_modules/
 config.json
 g_02500000
-
+old/
+samples/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

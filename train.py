@@ -2,8 +2,8 @@ import argparse
 import os
 import torch
 import torch.nn.functional as F
-import torchaudio
 from torch.utils.data import DataLoader
+from model.tacotron2_ms import Tacotron2MS
 
 from utils import get_config
 from utils.data import ArabDataset, text_mel_collate_fn
@@ -14,6 +14,48 @@ from utils.training import *
 parser = argparse.ArgumentParser()
 parser.add_argument('--config', type=str,
                     default="configs/nawar.yaml", help="Path to yaml config file")
+
+
+@torch.inference_mode()
+def validate(model, test_loader, writer, device, n_iter):
+    loss_sum = 0
+    n_test_sum = 0
+
+    model.eval()
+
+    for batch in test_loader:
+        text_padded, input_lengths, mel_padded, gate_padded, \
+            output_lengths = batch_to_device(batch, device)
+
+        y_pred = model(text_padded, input_lengths,
+                       mel_padded, output_lengths,
+                       torch.zeros_like(output_lengths))                       
+        mel_out, mel_out_postnet, gate_pred, alignments = y_pred
+
+        mel_loss = F.mse_loss(mel_out, mel_padded) + \
+            F.mse_loss(mel_out_postnet, mel_padded)
+        gate_loss = F.binary_cross_entropy_with_logits(gate_pred, gate_padded)
+        loss = mel_loss + gate_loss
+
+        loss_sum += mel_padded.size(0)*loss.item()
+        n_test_sum += mel_padded.size(0)
+
+    val_loss = loss_sum / n_test_sum
+
+    idx = random.randint(0, mel_padded.size(0) - 1)
+    mel_infer, *_ = model.infer(
+        text_padded[idx:idx+1], input_lengths[idx:idx+1]*0, input_lengths[idx:idx+1])
+
+    writer.add_sample(
+        alignments[idx, :, :input_lengths[idx].item()],
+        mel_out[idx], mel_padded[idx], mel_infer[0],
+        output_lengths[idx], n_iter)
+
+    writer.add_scalar('loss/val_loss', val_loss, n_iter)
+
+    model.train()
+
+    return val_loss
 
 
 def training_loop(model,
@@ -36,7 +78,8 @@ def training_loop(model,
                 output_lengths = batch_to_device(batch, device)
 
             y_pred = model(text_padded, input_lengths,
-                           mel_padded, output_lengths)
+                           mel_padded, output_lengths,
+                           torch.zeros_like(output_lengths))
             mel_out, mel_out_postnet, gate_out, _ = y_pred
 
             optimizer.zero_grad()
@@ -124,7 +167,7 @@ def main():
                              shuffle=False, collate_fn=text_mel_collate_fn)
 
     # construct model
-    model = torchaudio.models.Tacotron2(n_symbol=40)
+    model = Tacotron2MS(n_symbol=40)
     model = model.to(device)
     model.decoder.decoder_max_step = config.decoder_max_step
 
