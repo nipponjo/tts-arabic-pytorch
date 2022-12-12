@@ -1,4 +1,4 @@
-from text.symbols import symbols, EOS_TOKENS, DOUBLING_TOKEN
+from text.symbols import symbols, DOUBLING_TOKEN, EOS_TOKEN, SEPARATOR_TOKEN
 from text.phonetise_buckwalter import (
     arabic_to_buckwalter,
     buckwalter_to_arabic,
@@ -38,7 +38,7 @@ def buckwalter_to_phonemes(buckw):
     return process_utterance(buckw)
 
 
-def phonemes_to_tokens(phonemes: str):
+def phonemes_to_tokens(phonemes: str, append_space=True):
     phonemes = phonemes \
         .replace("sil", "") \
         .replace("+", "_+_") \
@@ -50,20 +50,23 @@ def phonemes_to_tokens(phonemes: str):
         if phonemes[i] in vowels:
             phonemes[i] = vowel_map[phonemes[i]]
 
-    phonemes += EOS_TOKENS
+    if append_space:
+        phonemes.append(SEPARATOR_TOKEN)
+   
+    phonemes.append(EOS_TOKEN)
 
     return phonemes
 
 
-def buckwalter_to_tokens(buckw):
+def buckwalter_to_tokens(buckw, append_space=True):
     phonemes = buckwalter_to_phonemes(buckw)
-    tokens = phonemes_to_tokens(phonemes)
+    tokens = phonemes_to_tokens(phonemes, append_space=append_space)
     return tokens
 
 
-def arabic_to_tokens(arabic):
+def arabic_to_tokens(arabic, append_space=True):
     buckw = arabic_to_buckwalter(arabic)
-    tokens = buckwalter_to_tokens(buckw)
+    tokens = buckwalter_to_tokens(buckw, append_space=append_space)
     return tokens
 
 

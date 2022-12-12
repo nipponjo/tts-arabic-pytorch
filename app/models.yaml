@@ -1,0 +1,15 @@
+fastpitch_mse:
+  type: fastpitch
+  path: pretrained/fastpitch_ar_mse.pth
+
+fastpitch_adv:
+  type: fastpitch
+  path: pretrained/fastpitch_ar_adv.pth
+
+tacotron2_mse:
+  type: tacotron2
+  path: pretrained/tacotron2_ar_mse.pth
+
+tacotron2_adv:
+  type: tacotron2
+  path: pretrained/tacotron2_ar_adv.pth

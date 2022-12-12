@@ -3,7 +3,7 @@ import os
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-from model.tacotron2_ms import Tacotron2MS
+from models.tacotron2.tacotron2_ms import Tacotron2MS
 
 from utils import get_config
 from utils.data import ArabDataset, text_mel_collate_fn

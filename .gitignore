@@ -1,5 +1,6 @@
 # This repo
 *.pth
+*.wav
 tmp/
 checkpoints/
 logs/

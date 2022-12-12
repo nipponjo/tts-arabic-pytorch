@@ -5,10 +5,20 @@ import torchaudio
 
 import text
 import utils.make_html as html
-from utils.plotting import get_alignment_figure, get_spectrogram_figure
+from utils.plotting import get_spectrogram_figure
 from vocoder import load_hifigan
+from vocoder.hifigan.denoiser import Denoiser
 from utils import get_basic_config
-from model.tacotron2_ms import Tacotron2MS
+
+# Examples:
+#python test.py --model fastpitch --checkpoint pretrained/fastpitch_ar_adv.pth --out_dir samples/test_fp_adv
+#python test.py --model fastpitch --checkpoint pretrained/fastpitch_ar_adv.pth --denoise 0.01 --out_dir samples/test_fp_adv_d
+#python test.py --model fastpitch --checkpoint pretrained/fastpitch_ar_mse.pth --out_dir samples/test_fp_mse
+
+#python test.py --model tacotron2 --checkpoint pretrained/tacotron2_ar_adv.pth --out_dir samples/test_tc2_adv
+#python test.py --model tacotron2 --checkpoint pretrained/tacotron2_ar_adv.pth --denoise 0.01 --out_dir samples/test_tc2_adv_d
+#python test.py --model tacotron2 --checkpoint pretrained/tacotron2_ar_mse.pth --out_dir samples/test_tc2_mse
+
 
 def test(args, text_arabic):
 
@@ -18,11 +28,17 @@ def test(args, text_arabic):
     out_dir = args.out_dir
     sample_rate = 22_050
 
-    # Load tacotron2 model
-    model = Tacotron2MS(n_symbol=40)
-    model_state_dict = torch.load(args.checkpoint)['model']
-    model.load_state_dict(model_state_dict)
-    print(f'Loaded tacotron2 from: {args.checkpoint}')
+    # Load model
+    if args.model == 'fastpitch':
+        from models.fastpitch import FastPitch
+        model = FastPitch(args.checkpoint)
+    elif args.model == 'tacotron2':
+        from models.tacotron2 import Tacotron2
+        model = Tacotron2(args.checkpoint)
+    else:
+        raise "model type not supported"
+
+    print(f'Loaded {args.model} from: {args.checkpoint}')
     model.eval()
 
     # Load vocoder model
@@ -32,17 +48,14 @@ def test(args, text_arabic):
     print(f'Loaded vocoder from: {config.vocoder_state_path}')
 
     model, vocoder = model.to(device), vocoder.to(device)
-
-    # Process utterance
-    tokens = text.arabic_to_tokens(text_arabic)
-    token_ids = text.tokens_to_ids(tokens)
-
-    ids_batch = torch.LongTensor(token_ids).unsqueeze(0).to(device)
+    denoiser = Denoiser(vocoder)
 
     # Infer spectrogram and wave
     with torch.inference_mode():
-        mel_spec, _, alignments = model.infer(ids_batch)
-        wave = vocoder(mel_spec)
+        mel_spec = model.ttmel(text_arabic)
+        wave = vocoder(mel_spec[None])
+        if args.denoise > 0:
+            wave = denoiser(wave, args.denoise)            
 
     # Save wave and images
     if not os.path.exists(out_dir):
@@ -51,10 +64,8 @@ def test(args, text_arabic):
 
     torchaudio.save(f'{out_dir}/wave.wav', wave[0].cpu(), sample_rate)
 
-    get_spectrogram_figure(mel_spec[0].cpu()).savefig(
+    get_spectrogram_figure(mel_spec.cpu()).savefig(
         f'{out_dir}/mel_spec.png')
-    get_alignment_figure(alignments[0].cpu().t()).savefig(
-        f'{out_dir}/alignment.png')
 
     t_phon = text.arabic_to_phonemes(text_arabic)
     t_phon = text.simplify_phonemes(t_phon.replace(' ', '').replace('+', ' '))
@@ -65,8 +76,7 @@ def test(args, text_arabic):
         f.write(html.make_sample_entry2(f"./wave.wav", text_arabic, t_phon))
         f.write(html.make_h_tag("Spectrogram"))
         f.write(html.make_img_tag('./mel_spec.png'))
-        f.write(html.make_h_tag("Alignment"))
-        f.write(html.make_img_tag('./alignment.png'))
+        f.write(html.make_volume_script(0.42))
         f.write(html.make_html_end())
 
     print(f"Saved test sample to: {out_dir}")
@@ -75,7 +85,10 @@ def test(args, text_arabic):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '--checkpoint', default='pretrained/tacotron2_ar_adv.pth')
+        '--model', type=str, default='fastpitch')
+    parser.add_argument(
+        '--checkpoint', default='pretrained/fastpitch_ar_adv.pth')  
+    parser.add_argument('--denoise', type=float, default=0)  
     parser.add_argument('--out_dir', default='samples/test')
     args = parser.parse_args()
 

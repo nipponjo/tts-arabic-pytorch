@@ -4,14 +4,28 @@ import torch
 import torchaudio
 import text
 import utils.make_html as html
-from model.networks import Tacotron2Wave
+
 from utils import progbar, read_lines_from_file
+
+# Examples:
+#python inference.py --list data/infer_text.txt --out_dir samples/res_tc2_adv0 --model tacotron2 --checkpoint pretrained/tacotron2_ar_adv.pth --batch_size 2
+#python inference.py --list data/infer_text.txt --out_dir samples/res_tc2_adv1 --model tacotron2 --checkpoint pretrained/tacotron2_ar_adv.pth --batch_size 2 --denoise 0.01
+#python inference.py --list data/infer_text.txt --out_dir samples/res_fp_adv0 --model fastpitch --checkpoint pretrained/fastpitch_ar_adv.pth --batch_size 2
+#python inference.py --list data/infer_text.txt --out_dir samples/res_fp_adv1 --model fastpitch --checkpoint pretrained/fastpitch_ar_adv.pth --batch_size 2 --denoise 0.01
 
 
 def infer(args):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    model = Tacotron2Wave(args.checkpoint)
+    if args.model == 'fastpitch':
+        from models.fastpitch import FastPitch2Wave
+        model = FastPitch2Wave(args.checkpoint)
+    elif args.model == 'tacotron2':
+        from models.tacotron2 import Tacotron2Wave
+        model = Tacotron2Wave(args.checkpoint)
+    else:
+        raise "model type not supported"
+
     model = model.to(device)
     model.eval()
 
@@ -30,6 +44,7 @@ def infer(args):
             # infer batch
             wav_list = model.tts(batch,
                                  batch_size=args.batch_size,
+                                 denoise=args.denoise,
                                  speed=args.speed)
 
             # save wavs and add entries to html file
@@ -51,7 +66,7 @@ def infer(args):
 
                 idx += 1
 
-        f.write(html.make_volume_script())
+        f.write(html.make_volume_script(0.5))
         f.write(html.make_html_end())
 
     print(f"Saved files to: {args.out_dir}")
@@ -62,10 +77,13 @@ def main():
     parser.add_argument(
         '--list', type=str, default='./data/infer_text.txt')
     parser.add_argument(
-        '--checkpoint', type=str, default='pretrained/tacotron2_ar_adv.pth')
+        '--model', type=str, default='fastpitch')
+    parser.add_argument(
+        '--checkpoint', type=str, default='pretrained/tacotron2_ar.pth')
     parser.add_argument('--out_dir', type=str, default='samples/results')
     parser.add_argument('--speed', type=float, default=1.0)
-    parser.add_argument('--batch_size', type=int, default=8)
+    parser.add_argument('--denoise', type=float, default=0)
+    parser.add_argument('--batch_size', type=int, default=2)
     parser.add_argument('--device', type=str,
                         default='cuda', choices=['cuda', 'cpu'])
     args = parser.parse_args()

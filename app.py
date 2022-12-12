@@ -10,16 +10,12 @@ from utils.app_utils import TTSManager
 
 app = FastAPI()
 
-# tts_manager = TTSManager(
-#     './pretrained/tacotron2_ar_mse.pth', 'app/static')
-
-tts_manager = TTSManager(
-    './pretrained/tacotron2_ar_adv.pth', 'app/static')
+tts_manager = TTSManager('app/static')
 
 class TTSRequest(BaseModel):
     buckw: str
     rate: float
-
+    denoise: float
 
 app.mount('/static', StaticFiles(directory='./app/static'), 'static')
 
@@ -40,7 +36,8 @@ async def get_file(filename: str):
 @app.post('/api/tts')
 async def tts(req: TTSRequest):
     print(req)
-    response_data = tts_manager.tts(req.buckw, req.rate)
+    response_data = tts_manager.tts(req.buckw, req.rate, 
+                                    req.denoise)
 
     return response_data
 

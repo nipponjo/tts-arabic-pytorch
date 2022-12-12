@@ -106,7 +106,7 @@
 
       .control-bar input {
         height: 1.5rem;
-        width: 3rem;
+        width: 3.5rem;
         margin-right: 0.5rem;       
       }
 
@@ -115,6 +115,12 @@
         font-size: 1.2rem;
         margin-right: 0.3rem;
       }
+
+      ul {
+        list-style-type: none;
+        padding-left: 0;
+      }
+
 
     </style>
   </head>
@@ -139,8 +145,12 @@
       </div>
 
       <div class="control-bar">
+        <label for="denoise-input">Denoise:</label>
+        <input id="denoise-input" type="number" min="0" value="0.01" step="0.005"/>
+       
         <label for="speed-input">Speed:</label>
-        <input id="speed-input" type="number" value="1.0" step="0.1"/>
+        <input id="speed-input" type="number" value="1.0" step="0.1"/> 
+
         <button onclick="tts(event)">
           <svg xmlns="http://www.w3.org/2000/svg" height="24" width="24"><path d="M4 22q-.825 0-1.412-.587Q2 20.825 2 20V4q0-.825.588-1.413Q3.175 2 4 2h9l-2 2H4v16h11v-3h2v3q0 .825-.587 1.413Q15.825 22 15 22Zm2-4v-2h7v2Zm0-3v-2h5v2Zm9 0-4-4H8V6h3l4-4Zm2-3.05v-6.9q.9.525 1.45 1.425.55.9.55 2.025t-.55 2.025q-.55.9-1.45 1.425Zm0 4.3v-2.1q1.75-.625 2.875-2.163Q21 10.45 21 8.5q0-1.95-1.125-3.488Q18.75 3.475 17 2.85V.75q2.6.675 4.3 2.812Q23 5.7 23 8.5t-1.7 4.938q-1.7 2.137-4.3 2.812Z"/></svg>TTS
         </button>
@@ -148,11 +158,10 @@
 
 
       <br />
-
-      <label for="para-phonemes">Phonetic</label>
-      <p id="para-phonemes"></p>
-
-      <audio id="audio-output" src="static/wave.wav" controls>Play</audio>
+      <ul id="res-list">
+        
+      </ul>
+      
     </main>
 
     <!-- SCRIPT -->
@@ -160,11 +169,13 @@
       const taArabic = document.getElementById("ta-arabic");
       const taBuckw = document.getElementById("ta-buckw");
       const inputSpeed = document.getElementById("speed-input");
-      const audioOut = document.getElementById("audio-output");
-      const phonemesOut = document.getElementById("para-phonemes");
+      const inputDenoise = document.getElementById("denoise-input");    
+      // const audioOut = document.getElementById("audio-output");
+      // const phonemesOut = document.getElementById("para-phonemes");
+      const resList = document.getElementById("res-list");
 
-      audioOut.volume = 0.5;
-
+      // audioOut.volume = 0.5;
+      
       let outputIdx = 0;
 
       const taArabicChanged = () => {
@@ -191,6 +202,24 @@
         taArabic.value = arabic;
       };
 
+      const addResults = (data) => { 
+        while(resList.firstChild) {
+          resList.removeChild(resList.firstChild);
+        }
+        data.forEach((d, i) => {
+          const li = document.createElement('li');
+          li.innerHTML = `    
+          <label for="para-phonemes">${d.name}</label>
+          <p id="para-phonemes">${d.phon}</p>
+          <audio id="audio-output" src="static/wave${d.id}.wav?${outputIdx}" controls>Play</audio>`;
+          resList.append(li);     
+        });
+
+        resList.querySelectorAll("audio").forEach( 
+          a => a.volume = 0.5
+        )
+      };
+
       const tts = async () => {
         const response = await fetch("/api/tts", {
           method: "POST",
@@ -200,14 +229,14 @@
           body: JSON.stringify({ 
             buckw: taBuckw.value,
             rate: inputSpeed.value,
+            denoise: inputDenoise.value,            
             }),
         });
         const data = await response.json();
-        phonemesOut.textContent = data.phonemes;
+        // phonemesOut.textContent = data.phonemes;
         console.log(data);
         outputIdx++;
-        audioOut.src = `static/wave.wav?${outputIdx}`;        
-        audioOut.play();        
+        addResults(data);      
       };
     </script>
   </body>

@@ -28,14 +28,27 @@ def make_html_start(title: Union[str, None] = None):
             align-items: center;
             justify-content: space-between;
             width: 60rem;
+            flex-wrap: wrap;
+        }
+        .audio-wrapper label {
+            display: inline-block;         
+            width: 3.5rem;
+        }
+        .audio-row {
+            display: flex;
+            align-items: center;
         }
         audio {
             height: 2rem;
-            width: 25rem;
+            width: 22rem;
+            margin-right: 1rem;
         }
         .text-arabic {
             font-size: 1.6rem;
             margin: 0.5rem;
+         }
+        .row-title {
+            width: 6rem;
          }
     """
 
@@ -109,6 +122,36 @@ def make_double_entry(wav_gen: str, wav_ref: str,
     """
     return html
 
+def make_multi_entry(wavs_list, row_titles,
+                      text0: str, text1: str, ar_dir: str='ltr'):
+    text0 = text0.replace('<', '&lt;').replace('>', '&gt;')
+    text1 = text1.replace('<', '&lt;').replace('>', '&gt;')
+
+    rows = ""
+    for i in range(0,len(wavs_list),2):     
+      row_title = row_titles[i//2] 
+      rows += f"""<div class="audio-row">
+          <span class="row-title">{row_title}</span>
+          <label>{wavs_list[i][0]}:</label>
+          <audio src="{wavs_list[i][1]}" controls></audio>    
+          <label>{wavs_list[i+1][0]}:</label>
+          <audio src="{wavs_list[i+1][1]}" controls></audio> 
+      </div>  
+      """
+
+    html = f"""<div class="sample">
+      <div class="audio-wrapper">
+        {rows} 
+      </div>
+      <div class="text-arabic" dir="{ar_dir}">
+        {text0}
+      </div>      
+      {text1}
+    </div>
+    """
+
+
+    return html
 
 def make_h_tag(text: str, n: int = 2):
     html = f"""<h{n}>{text}</h{n}>
