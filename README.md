@@ -8,6 +8,8 @@ Papers:
 
 Tacotron2 | Natural TTS Synthesis by Conditioning WaveNet on Mel Spectrogram Predictions ([arXiv](https://arxiv.org/abs/1712.05884))
 
+FastPitch | FastPitch: Parallel Text-to-speech with Pitch Prediction ([arXiv](https://arxiv.org/abs/2006.06873))
+
 HiFi-GAN  | HiFi-GAN: Generative Adversarial Networks for Efficient and High Fidelity Speech Synthesis ([arXiv](https://arxiv.org/abs/2010.05646))
 
 ## Audio Samples
@@ -25,6 +27,8 @@ Required packages:
 The model was trained with the mse loss as described in the paper. I also trained the model using an additional adversarial loss (adv). The difference is not large, but I think that the (adv) version often sounds a bit clearer. You can compare them yourself.
 
 Download the pretrained weights for the Tacotron2 model ([mse](https://drive.google.com/u/0/uc?id=1GCu-ZAcfJuT5qfzlKItcNqtuVNa7CNy9&export=download) | [adv](https://drive.google.com/u/0/uc?id=1FusCFZIXSVCQ9Q6PLb91GIkEnhn_zWRS&export=download)).
+
+Download the pretrained weights for the FastPitch model ([mse](https://drive.google.com/u/0/uc?id=1sliRc62wjPTnPWBVQ95NDUgnCSH5E8M0&export=download) | [adv](https://drive.google.com/u/0/uc?id=1-vZOhi9To_78-yRslC6sFLJBUjwgJT-D&export=download)).
 
 Download the [HiFi-GAN vocoder](https://github.com/jik876/hifi-gan) weights and config file ([direct link](https://drive.google.com/drive/folders/1YuOoV3lO2-Hhn1F2HJ2aQ4S0LC1JdKLd)). Either put them into `pretrained/hifigan-universal-v1` or edit the following lines in `configs/basic.yaml`.
 
