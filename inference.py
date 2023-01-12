@@ -7,6 +7,9 @@ import utils.make_html as html
 
 from utils import progbar, read_lines_from_file
 
+# default:
+#python inference.py --list data/infer_text.txt --out_dir samples/results --model fastpitch --checkpoint pretrained/fastpitch_ar_adv.pth --batch_size 2 --denoise 0
+
 # Examples:
 #python inference.py --list data/infer_text.txt --out_dir samples/res_tc2_adv0 --model tacotron2 --checkpoint pretrained/tacotron2_ar_adv.pth --batch_size 2
 #python inference.py --list data/infer_text.txt --out_dir samples/res_tc2_adv1 --model tacotron2 --checkpoint pretrained/tacotron2_ar_adv.pth --batch_size 2 --denoise 0.01
@@ -79,7 +82,7 @@ def main():
     parser.add_argument(
         '--model', type=str, default='fastpitch')
     parser.add_argument(
-        '--checkpoint', type=str, default='pretrained/tacotron2_ar.pth')
+        '--checkpoint', type=str, default='pretrained/fastpitch_ar_adv.pth')
     parser.add_argument('--out_dir', type=str, default='samples/results')
     parser.add_argument('--speed', type=float, default=1.0)
     parser.add_argument('--denoise', type=float, default=0)
