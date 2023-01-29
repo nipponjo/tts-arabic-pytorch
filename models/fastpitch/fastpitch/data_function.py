@@ -325,89 +325,94 @@ def normalize_pitch(pitch, mean, std):
 #         return pitch_mel
 
 
-# class TTSCollate:
-#     """Zero-pads model inputs and targets based on number of frames per step"""
+class TTSCollate:
+    """Zero-pads model inputs and targets based on number of frames per step"""
 
-#     def __call__(self, batch):
-#         """Collate training batch from normalized text and mel-spec"""
-#         # Right zero-pad all one-hot text sequences to max input length
-#         input_lengths, ids_sorted_decreasing = torch.sort(
-#             torch.LongTensor([len(x[0]) for x in batch]),
-#             dim=0, descending=True)
-#         max_input_len = input_lengths[0]
+    def __call__(self, batch):
+        """Collate training batch from normalized text and mel-spec"""
+        # Right zero-pad all one-hot text sequences to max input length
+        input_lengths, ids_sorted_decreasing = torch.sort(
+            torch.LongTensor([len(x[0]) for x in batch]),
+            dim=0, descending=True)
+        max_input_len = input_lengths[0]
 
-#         text_padded = torch.LongTensor(len(batch), max_input_len)
-#         text_padded.zero_()
-#         for i in range(len(ids_sorted_decreasing)):
-#             text = batch[ids_sorted_decreasing[i]][0]
-#             text_padded[i, :text.size(0)] = text
+        text_padded = torch.LongTensor(len(batch), max_input_len)
+        text_padded.zero_()
+        for i in range(len(ids_sorted_decreasing)):
+            text = batch[ids_sorted_decreasing[i]][0]
+            text_padded[i, :text.size(0)] = text
 
-#         # Right zero-pad mel-spec
-#         num_mels = batch[0][1].size(0)
-#         max_target_len = max([x[1].size(1) for x in batch])
+        # Right zero-pad mel-spec
+        num_mels = batch[0][1].size(0)
+        max_target_len = max([x[1].size(1) for x in batch])
 
-#         # Include mel padded and gate padded
-#         mel_padded = torch.FloatTensor(len(batch), num_mels, max_target_len)
-#         mel_padded.zero_()
-#         output_lengths = torch.LongTensor(len(batch))
-#         for i in range(len(ids_sorted_decreasing)):
-#             mel = batch[ids_sorted_decreasing[i]][1]
-#             mel_padded[i, :, :mel.size(1)] = mel
-#             output_lengths[i] = mel.size(1)
+        # Include mel padded and gate padded
+        mel_padded = torch.FloatTensor(len(batch), num_mels, max_target_len)
+        mel_padded.zero_()
+        output_lengths = torch.LongTensor(len(batch))
+        for i in range(len(ids_sorted_decreasing)):
+            mel = batch[ids_sorted_decreasing[i]][1]
+            mel_padded[i, :, :mel.size(1)] = mel
+            output_lengths[i] = mel.size(1)
 
-#         n_formants = batch[0][3].shape[0]
-#         pitch_padded = torch.zeros(mel_padded.size(0), n_formants,
-#                                    mel_padded.size(2), dtype=batch[0][3].dtype)
-#         energy_padded = torch.zeros_like(pitch_padded[:, 0, :])
+        n_formants = batch[0][3].shape[0]
+        pitch_padded = torch.zeros(mel_padded.size(0), n_formants,
+                                   mel_padded.size(2), dtype=batch[0][3].dtype)
+        energy_padded = torch.zeros_like(pitch_padded[:, 0, :])
 
-#         for i in range(len(ids_sorted_decreasing)):
-#             pitch = batch[ids_sorted_decreasing[i]][3]
-#             energy = batch[ids_sorted_decreasing[i]][4]
-#             pitch_padded[i, :, :pitch.shape[1]] = pitch
-#             energy_padded[i, :energy.shape[0]] = energy
+        for i in range(len(ids_sorted_decreasing)):
+            pitch = batch[ids_sorted_decreasing[i]][3]
+            energy = batch[ids_sorted_decreasing[i]][4]
+            pitch_padded[i, :, :pitch.shape[1]] = pitch
+            energy_padded[i, :energy.shape[0]] = energy
 
-#         if batch[0][5] is not None:
-#             speaker = torch.zeros_like(input_lengths)
-#             for i in range(len(ids_sorted_decreasing)):
-#                 speaker[i] = batch[ids_sorted_decreasing[i]][5]
-#         else:
-#             speaker = None
+        if batch[0][5] is not None:
+            speaker = torch.zeros_like(input_lengths)
+            for i in range(len(ids_sorted_decreasing)):
+                speaker[i] = batch[ids_sorted_decreasing[i]][5]
+        else:
+            speaker = None
 
-#         attn_prior_padded = torch.zeros(len(batch), max_target_len,
-#                                         max_input_len)
-#         attn_prior_padded.zero_()
-#         for i in range(len(ids_sorted_decreasing)):
-#             prior = batch[ids_sorted_decreasing[i]][6]
-#             attn_prior_padded[i, :prior.size(0), :prior.size(1)] = prior
+        attn_prior_padded = torch.zeros(len(batch), max_target_len,
+                                        max_input_len)
+        attn_prior_padded.zero_()
+        for i in range(len(ids_sorted_decreasing)):
+            prior = batch[ids_sorted_decreasing[i]][6]
+            attn_prior_padded[i, :prior.size(0), :prior.size(1)] = prior
 
-#         # Count number of items - characters in text
-#         len_x = [x[2] for x in batch]
-#         len_x = torch.Tensor(len_x)
+        # Count number of items - characters in text
+        len_x = [x[2] for x in batch]
+        len_x = torch.Tensor(len_x)
 
-#         audiopaths = [batch[i][7] for i in ids_sorted_decreasing]
+        audiopaths = [batch[i][7] for i in ids_sorted_decreasing]
 
-#         return (text_padded, input_lengths, mel_padded, output_lengths, len_x,
-#                 pitch_padded, energy_padded, speaker, attn_prior_padded,
-#                 audiopaths)
+        return (text_padded, input_lengths, mel_padded, output_lengths, len_x,
+                pitch_padded, energy_padded, speaker, attn_prior_padded,
+                audiopaths)
 
 
-# def batch_to_gpu(batch):
-#     (text_padded, input_lengths, mel_padded, output_lengths, len_x,
-#      pitch_padded, energy_padded, speaker, attn_prior, audiopaths) = batch
+def to_gpu(x):
+    x = x.contiguous()
+    return x.cuda(non_blocking=True) if torch.cuda.is_available() else x
 
-#     text_padded = to_gpu(text_padded).long()
-#     input_lengths = to_gpu(input_lengths).long()
-#     mel_padded = to_gpu(mel_padded).float()
-#     output_lengths = to_gpu(output_lengths).long()
-#     pitch_padded = to_gpu(pitch_padded).float()
-#     energy_padded = to_gpu(energy_padded).float()
-#     attn_prior = to_gpu(attn_prior).float()
-#     if speaker is not None:
-#         speaker = to_gpu(speaker).long()
 
-#     # Alignments act as both inputs and targets - pass shallow copies
-#     x = [text_padded, input_lengths, mel_padded, output_lengths,
-#          pitch_padded, energy_padded, speaker, attn_prior, audiopaths]
-#     y = [mel_padded, input_lengths, output_lengths]
-#     len_x = torch.sum(output_lengths)
-#     return (x, y, len_x)
+def batch_to_gpu(batch):
+    (text_padded, input_lengths, mel_padded, output_lengths, len_x,
+     pitch_padded, energy_padded, speaker, attn_prior, audiopaths) = batch
+
+    text_padded = to_gpu(text_padded).long()
+    input_lengths = to_gpu(input_lengths).long()
+    mel_padded = to_gpu(mel_padded).float()
+    output_lengths = to_gpu(output_lengths).long()
+    pitch_padded = to_gpu(pitch_padded).float()
+    energy_padded = to_gpu(energy_padded).float()
+    attn_prior = to_gpu(attn_prior).float()
+    if speaker is not None:
+        speaker = to_gpu(speaker).long()
+
+    # Alignments act as both inputs and targets - pass shallow copies
+    x = [text_padded, input_lengths, mel_padded, output_lengths,
+         pitch_padded, energy_padded, speaker, attn_prior, audiopaths]
+    y = [mel_padded, input_lengths, output_lengths]
+    len_x = torch.sum(output_lengths)
+    return (x, y, len_x)
