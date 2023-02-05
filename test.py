@@ -10,6 +10,9 @@ from vocoder import load_hifigan
 from vocoder.hifigan.denoiser import Denoiser
 from utils import get_basic_config
 
+#default:
+#python test.py --model fastpitch --checkpoint pretrained/fastpitch_ar_adv.pth --out_dir samples/test
+
 # Examples:
 #python test.py --model fastpitch --checkpoint pretrained/fastpitch_ar_adv.pth --out_dir samples/test_fp_adv
 #python test.py --model fastpitch --checkpoint pretrained/fastpitch_ar_adv.pth --denoise 0.01 --out_dir samples/test_fp_adv_d
