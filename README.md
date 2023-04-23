@@ -2,7 +2,7 @@
 
 TTS models (Tacotron2, FastPitch), trained on Nawar Halabi's [Arabic Speech Corpus](http://en.arabicspeechcorpus.com/), including the [HiFi-GAN vocoder](https://github.com/jik876/hifi-gan) for direct TTS inference.
 
-![tts](https://user-images.githubusercontent.com/28433296/178712707-264d1310-4162-4f34-b336-56e6be944e2d.png)
+![ar2wave5](https://user-images.githubusercontent.com/28433296/227660976-0d1e2033-276e-45e5-b232-a5a9b6b3f2a8.png)
 
 Papers:
 

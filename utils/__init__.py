@@ -47,6 +47,14 @@ def read_lines_from_file(path, encoding='utf-8'):
             lines.append(line.strip())
     return lines
 
+def write_lines_to_file(path, lines, mode='w', encoding='utf-8'):
+    with open(path, mode, encoding=encoding) as f:
+        for i, line in enumerate(lines):
+            if i == len(lines)-1:
+                f.write(line)
+                break
+            f.write(line + '\n')  
+                      
 
 def progbar(iterable, length=30, symbol='='):
     """Wrapper generator function for an iterable. 

@@ -43,10 +43,12 @@ def mask_from_lens(lens, max_len: Optional[int] = None):
 
 
 class FastPitchLoss(nn.Module):
-    def __init__(self, dur_predictor_loss_scale=1.0,
+    def __init__(self, mel_loss_scale=1.0,
+                 dur_predictor_loss_scale=1.0,
                  pitch_predictor_loss_scale=1.0, attn_loss_scale=1.0,
                  energy_predictor_loss_scale=0.1):
         super(FastPitchLoss, self).__init__()
+        self.mel_loss_scale = mel_loss_scale
         self.dur_predictor_loss_scale = dur_predictor_loss_scale
         self.pitch_predictor_loss_scale = pitch_predictor_loss_scale
         self.energy_predictor_loss_scale = energy_predictor_loss_scale
@@ -95,7 +97,7 @@ class FastPitchLoss(nn.Module):
         # Attention loss
         attn_loss = self.attn_ctc_loss(attn_logprob, in_lens, out_lens)
 
-        loss = (mel_loss
+        loss = (mel_loss * self.mel_loss_scale
                 + dur_pred_loss * self.dur_predictor_loss_scale
                 + pitch_loss * self.pitch_predictor_loss_scale
                 + energy_loss * self.energy_predictor_loss_scale

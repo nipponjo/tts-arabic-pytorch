@@ -11,6 +11,7 @@ config.json
 g_02500000
 old/
 samples/
+exp/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

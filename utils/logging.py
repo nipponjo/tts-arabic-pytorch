@@ -6,12 +6,13 @@ class TBLogger(SummaryWriter):
     def __init__(self, log_dir):
         super(TBLogger, self).__init__(log_dir)
 
-    def add_training_data(self, reduced_loss, grad_norm,
+    def add_training_data(self, meta, grad_norm,
                           learning_rate, tb_step: int):
 
-        self.add_scalar("loss/training_loss", reduced_loss, tb_step)
-        self.add_scalar("training/grad_norm", grad_norm, tb_step)
-        self.add_scalar("training/learning_rate", learning_rate, tb_step)
+        for k, v in meta.items():
+            self.add_scalar(f'train/{k}', v.item(), tb_step)
+        self.add_scalar("train/grad_norm", grad_norm, tb_step)
+        self.add_scalar("train/learning_rate", learning_rate, tb_step)
 
     def add_parameters(self, model, tb_step: int):
 
