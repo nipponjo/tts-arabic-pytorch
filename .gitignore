@@ -7,7 +7,7 @@ checkpoints/
 logs/
 tb_logs/
 node_modules/
-config.json
+# config.json
 g_02500000
 old/
 samples/

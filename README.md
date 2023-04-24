@@ -2,7 +2,9 @@
 
 TTS models (Tacotron2, FastPitch), trained on Nawar Halabi's [Arabic Speech Corpus](http://en.arabicspeechcorpus.com/), including the [HiFi-GAN vocoder](https://github.com/jik876/hifi-gan) for direct TTS inference.
 
-![ar2wave5](https://user-images.githubusercontent.com/28433296/227660976-0d1e2033-276e-45e5-b232-a5a9b6b3f2a8.png)
+<div align="center">
+  <img src="https://user-images.githubusercontent.com/28433296/227660976-0d1e2033-276e-45e5-b232-a5a9b6b3f2a8.png" width="95%"></img>
+</div>
 
 Papers:
 
@@ -30,12 +32,12 @@ Download the pretrained weights for the Tacotron2 model ([mse](https://drive.goo
 
 Download the pretrained weights for the FastPitch model ([mse](https://drive.google.com/u/0/uc?id=1sliRc62wjPTnPWBVQ95NDUgnCSH5E8M0&export=download) | [adv](https://drive.google.com/u/0/uc?id=1-vZOhi9To_78-yRslC6sFLJBUjwgJT-D&export=download)).
 
-Download the [HiFi-GAN vocoder](https://github.com/jik876/hifi-gan) weights and config file ([direct link](https://drive.google.com/drive/folders/1YuOoV3lO2-Hhn1F2HJ2aQ4S0LC1JdKLd)). Either put them into `pretrained/hifigan-universal-v1` or edit the following lines in `configs/basic.yaml`.
+Download the [HiFi-GAN vocoder](https://github.com/jik876/hifi-gan) weights ([link](https://drive.google.com/u/0/uc?id=1zSYYnJFS-gQox-IeI71hVY-fdPysxuFK&export=download)). Either put them into `pretrained/hifigan-asc-v1` or edit the following lines in `configs/basic.yaml`.
 
 ```yaml
 # vocoder
-vocoder_state_path: pretrained/hifigan-universal-v1/g_02500000
-vocoder_config_path: pretrained/hifigan-universal-v1/config.json
+vocoder_state_path: pretrained/hifigan-asc-v1/hifigan-asc.pth
+vocoder_config_path: pretrained/hifigan-asc-v1/config.json
 ```
 
 ## Using the models

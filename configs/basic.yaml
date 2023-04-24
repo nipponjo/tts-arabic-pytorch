@@ -15,6 +15,6 @@ use_cuda_if_available: True
 balanced_sampling: False
 
 # vocoder
-vocoder_state_path: pretrained/hifigan-universal-v1/g_02500000
-vocoder_config_path: pretrained/hifigan-universal-v1/config.json
+vocoder_state_path: pretrained/hifigan-asc-v1/hifigan-asc.pth
+vocoder_config_path: pretrained/hifigan-asc-v1/config.json
 
