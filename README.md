@@ -16,7 +16,7 @@ HiFi-GAN  | HiFi-GAN: Generative Adversarial Networks for Efficient and High Fid
 
 ## Audio Samples
 
-You can listen to some audio samples [here](https://nipponjo.github.io/tacotron2-arabic-samples).
+You can listen to some audio samples [here](https://nipponjo.github.io/tts-arabic-samples).
 
 ## Quick Setup
 Required packages:
