@@ -19,13 +19,6 @@ HiFi-GAN  | HiFi-GAN: Generative Adversarial Networks for Efficient and High Fid
 You can listen to some audio samples [here](https://nipponjo.github.io/tts-arabic-samples).
 
 ## Quick Setup
-Required packages:
-`torch torchaudio pyyaml`
-
-~ for training: `librosa matplotlib tensorboard`
-
-~ for the demo app: `fastapi "uvicorn[standard]"`
-
 The models were trained with the mse loss as described in the papers. I also trained the models using an additional adversarial loss (adv). The difference is not large, but I think that the (adv) version often sounds a bit clearer. You can compare them yourself.
 
 Download the pretrained weights for the Tacotron2 model ([mse](https://drive.google.com/u/0/uc?id=1GCu-ZAcfJuT5qfzlKItcNqtuVNa7CNy9&export=download) | [adv](https://drive.google.com/u/0/uc?id=1FusCFZIXSVCQ9Q6PLb91GIkEnhn_zWRS&export=download)).
@@ -39,6 +32,19 @@ Download the [HiFi-GAN vocoder](https://github.com/jik876/hifi-gan) weights ([li
 vocoder_state_path: pretrained/hifigan-asc-v1/hifigan-asc.pth
 vocoder_config_path: pretrained/hifigan-asc-v1/config.json
 ```
+
+This repo includes the diacritization models [Shakkala](https://github.com/Barqawiz/Shakkala) and [Shakkelha](https://github.com/AliOsm/shakkelha). 
+
+The weights can be downloaded [here](https://drive.google.com/u/1/uc?id=1MIZ_t7pqAQP-R3vwWWQTJMER8yPm1uB1&export=download). There also exists a [separate repo](https://github.com/nipponjo/arabic-vocalization).
+
+-> Alternatively, [download all models](https://drive.google.com/u/1/uc?id=1FD2J-xUk48JPF9TeS8ZKHzDC_ZNBfLd8&export=download) and put the content of the zip file into the `pretrained` folder.
+
+## Required packages:
+`torch torchaudio pyyaml`
+
+~ for training: `librosa matplotlib tensorboard`
+
+~ for the demo app: `fastapi "uvicorn[standard]"`
 
 ## Using the models
 
@@ -80,20 +86,20 @@ wave = model.tts("اَلسَّلامُ عَلَيكُم يَا صَدِيقِي"
 wave_list = model.tts(["صِفر" ,"واحِد" ,"إِثنان", "ثَلاثَة" ,"أَربَعَة" ,"خَمسَة", "سِتَّة" ,"سَبعَة" ,"ثَمانِيَة", "تِسعَة" ,"عَشَرَة"])
 ```
 
-By default, Arabic letters are converted using the [Buckwalter transliteration](https://en.wikipedia.org/wiki/Buckwalter_transliteration). The transliteration can also be used directly. If no Arabic script is expected to be used you can set `arabic_in=False`.
+By default, Arabic letters are converted using the [Buckwalter transliteration](https://en.wikipedia.org/wiki/Buckwalter_transliteration), which can also be used directly.
 
 ```python
-model = Tacotron2Wave('pretrained/tacotron2_ar.pth')
-model = FastPitch2Wave('pretrained/tacotron2_ar.pth')
 wave = model.tts(">als~alAmu Ealaykum yA Sadiyqiy")
-
-
-model = Tacotron2Wave('pretrained/tacotron2_ar.pth', arabic_in=False)
-model = FastPitch2Wave('pretrained/tacotron2_ar.pth', arabic_in=False)
-wave = model.tts(">als~alAmu Ealaykum yA Sadiyqiy")
-
 wave_list = model.tts(["Sifr", "wAHid", "<i^nAn", "^alA^ap", ">arbaEap", "xamsap", "sit~ap", "sabEap", "^amAniyap", "tisEap", "Ea$arap"])
 ```
+
+## Unvocalized text
+```python
+text_unvoc = "اللغة العربية هي أكثر اللغات السامية تحدثا، وإحدى أكثر اللغات انتشارا في العالم"
+wave_shakkala = model.tts(text_unvoc, vowelizer='shakkala')
+wave_shakkelha = model.tts(text_unvoc, vowelizer='shakkelha')
+```
+
 
 ### Inference from text file
 ```bash
