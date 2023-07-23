@@ -1,4 +1,4 @@
-from typing import List, Union
+from typing import List, Union, Optional
 
 import text
 import torch
@@ -9,6 +9,7 @@ from vocoder import load_hifigan
 from vocoder.hifigan.denoiser import Denoiser
 
 from .fastpitch.model import FastPitch as _FastPitch
+from ..diacritizers import load_vowelizer
 
 
 def text_collate_fn(batch: List[torch.Tensor]):
@@ -35,9 +36,10 @@ def text_collate_fn(batch: List[torch.Tensor]):
 
 class FastPitch(_FastPitch):
     def __init__(self,
-                 checkpoint: str = None,         
+                 checkpoint: str,         
                  arabic_in: bool = True,
-                 device=None,
+                 vowelizer: Optional[str] = None,
+                 device: Optional[torch.device] = None,
                  **kwargs):
         from models.fastpitch import net_config
         sds = torch.load(checkpoint)
@@ -49,6 +51,13 @@ class FastPitch(_FastPitch):
 
         #if checkpoint is not None:            
         self.load_state_dict(sds['model'])
+
+        self.config = get_basic_config()
+        
+        self.vowelizers = {}        
+        if vowelizer is not None:
+            self.vowelizers[vowelizer] = load_vowelizer(vowelizer, self.config)
+        self.default_vowelizer = vowelizer
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') \
             if device is None else device
@@ -63,11 +72,22 @@ class FastPitch(_FastPitch):
         self.device = torch.device('cpu')
         return super().cpu()
 
-    def to(self, device=None, **kwargs):        
+    def to(self, device: Optional[torch.device] = None, **kwargs):        
         self.device = device
         return super().to(device=device, **kwargs)
+    
+    def _vowelize(self, utterance: str, vowelizer: Optional[str] = None):
+        vowelizer = self.default_vowelizer if vowelizer is None else vowelizer
+        if vowelizer is not None:
+            if not vowelizer in self.vowelizers:
+                self.vowelizers[vowelizer] = load_vowelizer(vowelizer, self.config)
+                # print(f"loaded: {vowelizer}")    
+            utterance_ar = text.buckwalter_to_arabic(utterance)
+            utterance = self.vowelizers[vowelizer].predict(utterance_ar)
+        return utterance
 
-    def _tokenize(self, utterance: str):
+    def _tokenize(self, utterance: str, vowelizer: Optional[str] = None):
+        utterance = self._vowelize(utterance=utterance, vowelizer=vowelizer)
         if self.arabic_in:
             return text.arabic_to_tokens(utterance, append_space=False)
         return text.buckwalter_to_tokens(utterance, append_space=False)
@@ -76,17 +96,18 @@ class FastPitch(_FastPitch):
     def ttmel_single(self,
                      utterance: str,
                      speed: float = 1,
-                     speaker_id: int = 0):
+                     speaker_id: int = 0,
+                     vowelizer: Optional[str] = None
+                     ):
 
-        tokens = self._tokenize(utterance)
+        tokens = self._tokenize(utterance, vowelizer=vowelizer)
 
         token_ids = text.tokens_to_ids(tokens)
         ids_batch = torch.LongTensor(token_ids).unsqueeze(0).to(self.device)
         sid = torch.LongTensor([speaker_id]).to(self.device)
 
         # Infer spectrogram and wave      
-        (mel_spec, dec_lens, dur_pred, 
-            pitch_pred, energy_pred) = self.infer(ids_batch, pace=speed)
+        mel_spec, *_ = self.infer(ids_batch, pace=speed)
 
         mel_spec = mel_spec[0]
 
@@ -96,10 +117,11 @@ class FastPitch(_FastPitch):
     def ttmel_batch(self,
                     batch: List[str],
                     speed: float = 1,
-                    speaker_id: int = 0
+                    speaker_id: int = 0,
+                    vowelizer: Optional[str] = None
                     ):
 
-        batch_tokens = [self._tokenize(line) for line in batch]
+        batch_tokens = [self._tokenize(line, vowelizer=vowelizer) for line in batch]
 
         batch_ids = [torch.LongTensor(text.tokens_to_ids(tokens))
                      for tokens in batch_tokens]
@@ -126,36 +148,45 @@ class FastPitch(_FastPitch):
         return mel_list
 
     def ttmel(self,
-              text_buckw: Union[str, List[str]],
+              text_input: Union[str, List[str]],
               speed: float = 1,
               speaker_id: int = 0,
               batch_size: int = 1,
+              vowelizer: Optional[str] = None
               ):
         # input: string
-        if isinstance(text_buckw, str):
-            return self.ttmel_single(text_buckw, speed=speed, speaker_id=speaker_id)
+        if isinstance(text_input, str):
+            return self.ttmel_single(text_input, speed=speed, 
+                                     speaker_id=speaker_id,
+                                     vowelizer=vowelizer)
 
         # input: list
-        assert isinstance(text_buckw, list)
-        batch = text_buckw
+        assert isinstance(text_input, list)
+        batch = text_input
         mel_list = []
 
         if batch_size == 1:
             for sample in batch:
-                mel = self.ttmel_single(sample, speed=speed, speaker_id=speaker_id)
+                mel = self.ttmel_single(sample, speed=speed, 
+                                        speaker_id=speaker_id,
+                                        vowelizer=vowelizer)
                 mel_list.append(mel)
             return mel_list
 
         # infer one batch
         if len(batch) <= batch_size:
-            return self.ttmel_batch(batch, speed=speed, speaker_id=speaker_id)
+            return self.ttmel_batch(batch, speed=speed, 
+                                    speaker_id=speaker_id,
+                                    vowelizer=vowelizer)
 
         # batched inference
         batches = [batch[k:k+batch_size]
                    for k in range(0, len(batch), batch_size)]
 
         for batch in batches:
-            mels = self.ttmel_batch(batch, speed=speed, speaker_id=speaker_id)
+            mels = self.ttmel_batch(batch, speed=speed, 
+                                    speaker_id=speaker_id,
+                                    vowelizer=vowelizer)
             mel_list += mels
 
         return mel_list
@@ -163,9 +194,10 @@ class FastPitch(_FastPitch):
 
 class FastPitch2Wave(nn.Module):
     def __init__(self,
-                 model_sd_path,
-                 vocoder_sd=None,
-                 vocoder_config=None,
+                 model_sd_path: str,
+                 vocoder_sd: Optional[str] = None,
+                 vocoder_config: Optional[str] = None,
+                 vowelizer: Optional[str] = None,
                  arabic_in: bool = True
                  ):
 
@@ -176,8 +208,10 @@ class FastPitch2Wave(nn.Module):
         # if 'config' in state_dicts:
         #     net_config = state_dicts['config']
 
-        model = FastPitch(model_sd_path, arabic_in=arabic_in)       
-        model.load_state_dict(state_dicts['model'])
+        model = FastPitch(model_sd_path, 
+                          arabic_in=arabic_in,
+                          vowelizer=vowelizer)       
+        model.load_state_dict(state_dicts['model'], strict=True)
         self.model = model
 
         if vocoder_sd is None or vocoder_config is None:
@@ -199,10 +233,12 @@ class FastPitch2Wave(nn.Module):
                    text_buckw: str,
                    speed: float = 1,  
                    speaker_id: int = 0,
-                   denoise: float = 0,                               
+                   denoise: float = 0,   
+                   vowelizer: Optional[str] = None,                             
                    return_mel=False):
 
-        mel_spec = self.model.ttmel_single(text_buckw, speed, speaker_id)
+        mel_spec = self.model.ttmel_single(text_buckw, speed, 
+                                           speaker_id, vowelizer)
           
         wave = self.vocoder(mel_spec)
 
@@ -217,12 +253,15 @@ class FastPitch2Wave(nn.Module):
     @torch.inference_mode()
     def tts_batch(self,
                   batch: List[str],
-                  speed: float = 1,  
-                  speaker_id: int = 0,   
-                  denoise: float = 0,                             
-                  return_mel=False):
+                  speed: float = 1,
+                  speaker_id: int = 0,
+                  denoise: float = 0,
+                  vowelizer: Optional[str] = None,
+                  return_mel: bool = False
+                  ):
 
-        mel_list = self.model.ttmel_batch(batch, speed, speaker_id)
+        mel_list = self.model.ttmel_batch(batch, speed, 
+                                          speaker_id, vowelizer)
 
         wav_list = []
         for mel in mel_list:  
@@ -238,28 +277,41 @@ class FastPitch2Wave(nn.Module):
         return wav_list
 
     def tts(self,
-            text_buckw: Union[str, List[str]],
-            speed: float = 1,   
+            text_input: Union[str, List[str]],
+            speed: float = 1.,
             denoise: float = 0, 
             speaker_id: int = 0,
-            batch_size: int = 2,                
+            batch_size: int = 2,
+            vowelizer: Optional[str] = None,          
             return_mel: bool = False):
+        """
+        Args:
+            text_buckw (str|List[str]): Input text.
+            speed (float): Speaking speed.
+            denoise (float): Hifi-GAN Denoiser strength.
+            speaker_id (int): Speaker Id.
+            batch_size (int): bacch size for inferrence.
+            vowelizer (None|str): options [None, `'shakkala'`, `'shakkelha'`].
+            return_mel (bool): Whether to return the mel spectrogram(s).
+        """
 
         # input: string
-        if isinstance(text_buckw, str):
-            return self.tts_single(text_buckw, speaker_id=speaker_id, 
-                                   speed=speed, denoise=denoise,                                
+        if isinstance(text_input, str):
+            return self.tts_single(text_input, speaker_id=speaker_id,
+                                   speed=speed, denoise=denoise,
+                                   vowelizer=vowelizer,     
                                    return_mel=return_mel)
 
         # input: list
-        assert isinstance(text_buckw, list)
-        batch = text_buckw
+        assert isinstance(text_input, list)
+        batch = text_input
         wav_list = []
 
         if batch_size == 1:
             for sample in batch:
                 wav = self.tts_single(sample, speaker_id=speaker_id,
-                                      speed=speed, denoise=denoise,                               
+                                      speed=speed, denoise=denoise,
+                                      vowelizer=vowelizer,
                                       return_mel=return_mel)
                 wav_list.append(wav)
             return wav_list
@@ -267,7 +319,8 @@ class FastPitch2Wave(nn.Module):
         # infer one batch
         if len(batch) <= batch_size:
             return self.tts_batch(batch, speaker_id=speaker_id,
-                                  speed=speed, denoise=denoise,                       
+                                  speed=speed, denoise=denoise,
+                                  vowelizer=vowelizer,                  
                                   return_mel=return_mel)
 
         # batched inference
@@ -276,8 +329,10 @@ class FastPitch2Wave(nn.Module):
 
         for batch in batches:
             wavs = self.tts_batch(batch, speaker_id=speaker_id,
-                                  speed=speed, denoise=denoise,                            
+                                  speed=speed, denoise=denoise,
+                                  vowelizer=vowelizer,                          
                                   return_mel=return_mel)
             wav_list += wavs
 
         return wav_list
+    

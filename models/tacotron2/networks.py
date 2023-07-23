@@ -1,4 +1,4 @@
-from typing import List, Union
+from typing import List, Union, Optional
 
 import text
 import torch
@@ -9,6 +9,8 @@ from text.symbols import EOS_TOKENS, SEPARATOR_TOKEN
 from utils import get_basic_config
 from vocoder import load_hifigan
 from vocoder.hifigan.denoiser import Denoiser
+
+from ..diacritizers import load_vowelizer
 
 
 def text_collate_fn(batch: List[torch.Tensor]):
@@ -71,7 +73,8 @@ class Tacotron2(Tacotron2MS):
                  n_symbol: int = 40,
                  decoder_max_step: int = 3000,
                  arabic_in: bool = True,
-                 device=None,
+                 vowelizer: Optional[str] = None,
+                 device: Optional[torch.device] = None,
                  **kwargs):
         super().__init__(n_symbol=n_symbol,
                          decoder_max_step=decoder_max_step,
@@ -82,6 +85,13 @@ class Tacotron2(Tacotron2MS):
         if checkpoint is not None:
             sds = torch.load(checkpoint)
             self.load_state_dict(sds['model'])
+        
+        self.config = get_basic_config()
+        
+        self.vowelizers = {}        
+        if vowelizer is not None:
+            self.vowelizers[vowelizer] = load_vowelizer(vowelizer, self.config)
+        self.default_vowelizer = vowelizer
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') \
             if device is None else device
@@ -99,8 +109,19 @@ class Tacotron2(Tacotron2MS):
     def to(self, device=None, **kwargs):        
         self.device = device
         return super().to(device=device, **kwargs)
+    
+    def _vowelize(self, utterance: str, vowelizer: Optional[str] = None):
+        vowelizer = self.default_vowelizer if vowelizer is None else vowelizer
+        if vowelizer is not None:
+            if not vowelizer in self.vowelizers:
+                self.vowelizers[vowelizer] = load_vowelizer(vowelizer, self.config)
+                # print(f"loaded: {vowelizer}")    
+            utterance_ar = text.buckwalter_to_arabic(utterance)
+            utterance = self.vowelizers[vowelizer].predict(utterance_ar)
+        return utterance
 
-    def _tokenize(self, utterance: str):
+    def _tokenize(self, utterance: str, vowelizer: Optional[str] = None):
+        utterance = self._vowelize(utterance=utterance, vowelizer=vowelizer)
         if self.arabic_in:
             return text.arabic_to_tokens(utterance)
         return text.buckwalter_to_tokens(utterance)
@@ -110,9 +131,11 @@ class Tacotron2(Tacotron2MS):
                      utterance: str,                  
                      speaker_id: int = 0,
                      speed: Union[int, float, None] = None,
-                     postprocess_mel: bool = True):
+                     vowelizer: Optional[str] = None,
+                     postprocess_mel: bool = True,                     
+                     ):
 
-        tokens = self._tokenize(utterance)
+        tokens = self._tokenize(utterance, vowelizer=vowelizer)
 
         process_mel = False
         if postprocess_mel and needs_postprocessing(tokens[-self.n_eos-1]):
@@ -139,9 +162,11 @@ class Tacotron2(Tacotron2MS):
                     batch: List[str],
                     speaker_id: int = 0,
                     speed: Union[int, float, None] = None,
-                    postprocess_mel: bool = True):
+                    vowelizer: Optional[str] = None,
+                    postprocess_mel: bool = True                    
+                    ):
 
-        batch_tokens = [self._tokenize(line) for line in batch]
+        batch_tokens = [self._tokenize(line, vowelizer=vowelizer) for line in batch]
 
         list_postprocess = []
         if postprocess_mel:
@@ -188,36 +213,46 @@ class Tacotron2(Tacotron2MS):
         return mel_list
 
     def ttmel(self,
-              text_buckw: Union[str, List[str]],
+              text_input: Union[str, List[str]],
               speaker_id: int = 0,
               speed: Union[int, float, None] = None,
               batch_size: int = 8,
-              postprocess_mel: bool = True):
+              vowelizer: Optional[str] = None,
+              postprocess_mel: bool = True
+              ):
         # input: string
-        if isinstance(text_buckw, str):
-            return self.ttmel_single(text_buckw, speaker_id, speed, postprocess_mel)
+        if isinstance(text_input, str):
+            return self.ttmel_single(text_input, speaker_id, 
+                                     speed, vowelizer,
+                                     postprocess_mel)
 
         # input: list
-        assert isinstance(text_buckw, list)
-        batch = text_buckw
+        assert isinstance(text_input, list)
+        batch = text_input
         mel_list = []
 
         if batch_size == 1:
             for sample in batch:
-                mel = self.ttmel_single(sample, speaker_id, speed, postprocess_mel)
+                mel = self.ttmel_single(sample, speaker_id, 
+                                        speed, vowelizer,
+                                        postprocess_mel)
                 mel_list.append(mel)
             return mel_list
 
         # infer one batch
         if len(batch) <= batch_size:
-            return self.ttmel_batch(batch, speaker_id, speed, postprocess_mel)
+            return self.ttmel_batch(batch, speaker_id, 
+                                    speed, vowelizer,
+                                    postprocess_mel)
 
         # batched inference
         batches = [batch[k:k+batch_size]
                    for k in range(0, len(batch), batch_size)]
 
         for batch in batches:
-            mels = self.ttmel_batch(batch, speaker_id, speed, postprocess_mel)   
+            mels = self.ttmel_batch(batch, speaker_id, 
+                                    speed, vowelizer,
+                                    postprocess_mel)   
             mel_list += mels
 
         return mel_list
@@ -225,15 +260,19 @@ class Tacotron2(Tacotron2MS):
 
 class Tacotron2Wave(nn.Module):
     def __init__(self,
-                 model_sd_path,
-                 vocoder_sd=None,
-                 vocoder_config=None,
+                 model_sd_path: str,
+                 vocoder_sd: Optional[str] = None,
+                 vocoder_config: Optional[str] = None,
+                 vowelizer: Optional[str] = None,
                  arabic_in: bool = True,
-                 n_symbol: int = 40):
+                 n_symbol: int = 40
+                 ):
 
         super().__init__()
 
-        model = Tacotron2(n_symbol=n_symbol, arabic_in=arabic_in)
+        model = Tacotron2(n_symbol=n_symbol, 
+                          arabic_in=arabic_in, 
+                          vowelizer=vowelizer)
 
         state_dicts = torch.load(model_sd_path)
         model.load_state_dict(state_dicts['model'])
@@ -255,16 +294,18 @@ class Tacotron2Wave(nn.Module):
 
     @torch.inference_mode()
     def tts_single(self,
-                   text_buckw: str,
+                   text_input: str,
                    speed: Union[int, float, None] = None,
                    speaker_id: int = 0,
                    denoise: float = 0,
-                   postprocess_mel=True,
-                   return_mel=False):
+                   vowelizer: Optional[str] = None,
+                   postprocess_mel: bool = True,
+                   return_mel: bool = False
+                   ):
 
-        mel_spec = self.model.ttmel_single(text_buckw, speaker_id, speed, postprocess_mel)
-        # if speed is not None:
-        #     mel_spec = resize_mel(mel_spec, rate=speed)
+        mel_spec = self.model.ttmel_single(text_input, speaker_id, 
+                                           speed, vowelizer,
+                                           postprocess_mel)
 
         wave = self.vocoder(mel_spec)
 
@@ -281,11 +322,15 @@ class Tacotron2Wave(nn.Module):
                   batch: List[str],
                   speed: Union[int, float, None] = None,
                   denoise: float = 0,
-                  speaker_id: int = 0,                  
-                  postprocess_mel=True,
-                  return_mel=False):
+                  speaker_id: int = 0,
+                  vowelizer: Optional[str] = None,          
+                  postprocess_mel: bool = True,
+                  return_mel: bool = False
+                  ):
 
-        mel_list = self.model.ttmel_batch(batch, speaker_id, speed, postprocess_mel)
+        mel_list = self.model.ttmel_batch(batch, speaker_id, speed,
+                                          vowelizer,
+                                          postprocess_mel)
 
         wav_list = []
         for mel in mel_list:       
@@ -306,13 +351,27 @@ class Tacotron2Wave(nn.Module):
             denoise: float = 0,
             speaker_id: int = 0,
             batch_size: int = 8,
+            vowelizer: Optional[str] = None,
             postprocess_mel: bool = True,
-            return_mel: bool = False):
+            return_mel: bool = False
+            ):
+        """
+        Args:
+            text_buckw (str|List[str]): Input text.
+            speed (float): Speaking speed.
+            denoise (float): Hifi-GAN Denoiser strength.
+            speaker_id (int): Speaker Id.
+            batch_size (int): bacch size for inferrence.
+            vowelizer (None|str): options [None, `'shakkala'`, `'shakkelha'`].
+            postprocess_mel (bool): Whether to postprocess.
+            return_mel (bool): Whether to return the mel spectrogram(s).
+        """
 
         # input: string
         if isinstance(text_buckw, str):
             return self.tts_single(text_buckw, speaker_id=speaker_id, 
                                    speed=speed, denoise=denoise,
+                                   vowelizer=vowelizer,
                                    postprocess_mel=postprocess_mel,
                                    return_mel=return_mel)
 
@@ -325,6 +384,7 @@ class Tacotron2Wave(nn.Module):
             for sample in batch:
                 wav = self.tts_single(sample, speaker_id=speaker_id,
                                       speed=speed, denoise=denoise,
+                                      vowelizer=vowelizer,
                                       postprocess_mel=postprocess_mel,
                                       return_mel=return_mel)
                 wav_list.append(wav)
@@ -334,6 +394,7 @@ class Tacotron2Wave(nn.Module):
         if len(batch) <= batch_size:
             return self.tts_batch(batch, speaker_id=speaker_id,
                                   speed=speed, denoise=denoise,
+                                  vowelizer=vowelizer,
                                   postprocess_mel=postprocess_mel,
                                   return_mel=return_mel)
 
@@ -344,6 +405,7 @@ class Tacotron2Wave(nn.Module):
         for batch in batches:
             wavs = self.tts_batch(batch,  speaker_id=speaker_id,
                                   speed=speed, denoise=denoise,
+                                  vowelizer=vowelizer,
                                   postprocess_mel=postprocess_mel,
                                   return_mel=return_mel)
             wav_list += wavs
