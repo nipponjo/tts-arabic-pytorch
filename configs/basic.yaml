@@ -18,3 +18,7 @@ balanced_sampling: False
 vocoder_state_path: pretrained/hifigan-asc-v1/hifigan-asc.pth
 vocoder_config_path: pretrained/hifigan-asc-v1/config.json
 
+# diacritizers
+shakkala_path: pretrained/diacritizers/shakkala_second_model6.pth
+shakkelha_path: pretrained/diacritizers/shakkelha_rnn_3_big_20.pth
+
