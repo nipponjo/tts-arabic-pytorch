@@ -90,13 +90,10 @@ optimizer_d = torch.optim.AdamW(critic.parameters(),
                                 weight_decay=config.weight_decay)
 
 
-criterion = Tacotron2Loss(mel_loss_scale=1.0, 
-                          attn_loss_scale=0.1)
+criterion = Tacotron2Loss(mel_loss_scale=1.0)
 
 
 # %%
-
-# config.restore_model = './checkpoints/exp_tc2_adv/states.pth'
 
 # resume from existing checkpoint
 n_epoch, n_iter = 0, 0
@@ -173,9 +170,9 @@ for epoch in range(n_epoch, config.epochs):
 
         # GENERATOR
         loss, meta = criterion(
-            mel_out,  mel_out_postnet,
-            gate_out,  mel_padded, alignments, 
-            input_lengths,  output_lengths)
+            mel_out, mel_out_postnet,
+            mel_padded, 
+            gate_out, gate_padded)  
 
 
         d_gen2, fmaps_gen = critic(chunks_gen_)

@@ -190,7 +190,7 @@ class Tacotron2MS(nn.Module):
         self.decoder = _Decoder(
             n_mels,
             n_frames_per_step,
-            encoder_embedding_dim + speaker_embedding_dim,
+            encoder_embedding_dim + (speaker_embedding_dim if num_speakers > 1 else 0),
             decoder_rnn_dim,
             decoder_max_step,
             decoder_dropout,
@@ -206,8 +206,10 @@ class Tacotron2MS(nn.Module):
         self.postnet = _Postnet(
             n_mels, postnet_embedding_dim, postnet_kernel_size, postnet_n_convolution)
 
-        self.speaker_embedding = nn.Embedding(
-            num_speakers, speaker_embedding_dim)
+        self.speaker_embedding = None
+        if num_speakers > 1:
+            self.speaker_embedding = nn.Embedding(
+                num_speakers, speaker_embedding_dim)
 
     def forward(
         self,
@@ -245,12 +247,15 @@ class Tacotron2MS(nn.Module):
 
         embedded_inputs = self.embedding(tokens).transpose(1, 2)
         embedded_text = self.encoder(embedded_inputs, token_lengths)
-        embedded_speakers = self.speaker_embedding(speaker_ids).unsqueeze(1)
-        embedded_speakers = embedded_speakers.repeat(
-            1, embedded_text.size(1), 1)
 
-        encoder_outputs = torch.cat(
-            (embedded_text, embedded_speakers), dim=2)
+        if self.speaker_embedding is not None:
+            embedded_speakers = self.speaker_embedding(speaker_ids).unsqueeze(1)
+            embedded_speakers = embedded_speakers.repeat(
+                1, embedded_text.size(1), 1)
+            encoder_outputs = torch.cat(
+                (embedded_text, embedded_speakers), dim=2)
+        else:
+            encoder_outputs = embedded_text
 
         mel_specgram, gate_outputs, alignments = self.decoder(
             encoder_outputs, mel_specgram, memory_lengths=token_lengths
@@ -306,12 +311,15 @@ class Tacotron2MS(nn.Module):
 
         embedded_inputs = self.embedding(tokens).transpose(1, 2)
         embedded_text = self.encoder(embedded_inputs, lengths)
-        embedded_speakers = self.speaker_embedding(speaker_ids).unsqueeze(1)
-        embedded_speakers = embedded_speakers.repeat(
-            1, embedded_text.size(1), 1)
 
-        encoder_outputs = torch.cat(
-            (embedded_text, embedded_speakers), dim=2)
+        if self.speaker_embedding is not None:
+            embedded_speakers = self.speaker_embedding(speaker_ids).unsqueeze(1)
+            embedded_speakers = embedded_speakers.repeat(
+                1, embedded_text.size(1), 1)
+            encoder_outputs = torch.cat(
+                (embedded_text, embedded_speakers), dim=2)
+        else:
+            encoder_outputs = embedded_text
 
         mel_specgram, mel_specgram_lengths, _, alignments = self.decoder.infer(
             encoder_outputs, lengths)
