@@ -55,7 +55,7 @@ def test(args, text_arabic):
 
     # Infer spectrogram and wave
     with torch.inference_mode():
-        mel_spec = model.ttmel(text_arabic)
+        mel_spec = model.ttmel(text_arabic, vowelizer=args.vowelizer)
         wave = vocoder(mel_spec[None])
         if args.denoise > 0:
             wave = denoiser(wave, args.denoise)            
@@ -84,18 +84,29 @@ def test(args, text_arabic):
 
     print(f"Saved test sample to: {out_dir}")
 
+    if not args.do_not_play:
+        try:  
+            import sounddevice as sd
+            sd.play(wave[0, 0].cpu(), sample_rate, blocking=True)
+        except:
+            pass
+
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        '--model', type=str, default='fastpitch')
+    parser.add_argument('--text', type=str, 
+                        default="أَلسَّلامُ عَلَيكُم يا صَديقي")
+    parser.add_argument('--model', type=str, default='fastpitch')
     parser.add_argument(
         '--checkpoint', default='pretrained/fastpitch_ar_adv.pth')  
     parser.add_argument('--denoise', type=float, default=0)  
     parser.add_argument('--out_dir', default='samples/test')
+    parser.add_argument('--vowelizer', default=None)
+
+    parser.add_argument('--do_not_play', action='store_true')   
     args = parser.parse_args()
 
-    text_arabic = "أَلسَّلامُ عَلَيكُم يا صَديقي"
+    text_arabic = args.text
 
     test(args, text_arabic)
 

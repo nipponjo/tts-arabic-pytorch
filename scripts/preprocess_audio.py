@@ -18,10 +18,9 @@ wav_new_path = 'G:/data/arabic-speech-corpus/wav_new'
 
 # %%
 
+sr_target = 22050
 silence_audio_size = 256 * 3
 
-resampler = torchaudio.transforms.Resample(48_000, 22_050,
-                                           lowpass_filter_width=1024)
 
 lines = open(txtpath).readlines()
 
@@ -30,9 +29,11 @@ for line in tqdm(lines):
     fname = line.split('" "')[0][:-1]
 
     fpath = os.path.join(wav_path, fname)
-    wave, _ = torchaudio.load(fpath)
-
-    wave = resampler(wave)
+    wave, sr = torchaudio.load(fpath)
+    
+    if sr != sr_target:
+        wave = torchaudio.functional.resample(wave, sr, sr_target, 
+                                              lowpass_filter_width=1024)
 
     wave_ = wave[0].numpy()
     wave_ = wave_ / np.abs(wave_).max() * 0.999
@@ -41,7 +42,7 @@ for line in tqdm(lines):
     wave_ = np.append(wave_, [0.]*silence_audio_size)
 
     torchaudio.save(f'{wav_new_path}/{fname}',
-                    torch.Tensor(wave_).unsqueeze(0), 22_050)
+                    torch.Tensor(wave_).unsqueeze(0), sr_target)
 
 
 # %%

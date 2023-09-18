@@ -1,4 +1,5 @@
 # %%
+import argparse
 import os
 import torch
 from torch.utils.data import DataLoader
@@ -7,25 +8,24 @@ from models.tacotron2.tacotron2_ms import Tacotron2MS
 from utils import get_config
 from utils.data import ArabDataset, text_mel_collate_fn
 from utils.logging import TBLogger
-from utils.training import *
+from utils.training import batch_to_device, save_states
 
 from models.tacotron2.loss import Tacotron2Loss
 
 # %%
-def save_states(fname, model, optimizer, 
-                n_iter, epoch, config):
-    torch.save({'model': model.state_dict(),                             
-                'optim': optimizer.state_dict(),         
-                'epoch': epoch, 'iter': n_iter,       
-                },
-               f'{config.checkpoint_dir}/{fname}')
+
+try:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', type=str,
+                        default="configs/nawar_tc2.yaml", help="Path to yaml config file")
+    args = parser.parse_args()
+    config_path = args.config
+except:
+    config_path = './configs/nawar_tc2.yaml'
 
 # %%
 
-config_path = './configs/nawar.yaml'
-
 config = get_config(config_path)
-
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # set random seed
@@ -41,12 +41,10 @@ if not os.path.isdir(config.checkpoint_dir):
     print(f"Created checkpoint_dir folder: {config.checkpoint_dir}")
 
 # datasets
-if config.cache_dataset:
-    print('Caching datasets ...')
-train_dataset = ArabDataset(config.train_labels, config.train_wavs_path,
-                            cache=config.cache_dataset)
-test_dataset = ArabDataset(config.test_labels, config.test_wavs_path,
-                           cache=config.cache_dataset)
+train_dataset = ArabDataset(txtpath=config.train_labels, 
+                            wavpath=config.train_wavs_path,
+                            label_pattern=config.label_pattern)
+# test_dataset = ArabDataset(config.test_labels, config.test_wavs_path)
 
 # optional: balanced sampling
 sampler, shuffle, drop_last = None, True, True
@@ -64,26 +62,25 @@ train_loader = DataLoader(train_dataset,
                           shuffle=shuffle, drop_last=drop_last,
                           sampler=sampler)
 
-test_loader = DataLoader(test_dataset,
-                         batch_size=config.batch_size, drop_last=False,
-                         shuffle=False, collate_fn=text_mel_collate_fn)
+# test_loader = DataLoader(test_dataset,
+#                          batch_size=config.batch_size, drop_last=False,
+#                          shuffle=False, collate_fn=text_mel_collate_fn)
 
-# construct model
-model = Tacotron2MS(n_symbol=40)
+# %% Generator
+model = Tacotron2MS(n_symbol=40, num_speakers=40)
 model = model.to(device)
 model.decoder.decoder_max_step = config.decoder_max_step
 
-# optimizer
-optimizer = torch.optim.AdamW(model.parameters(),                  
-                              lr=config.learning_rate,
+optimizer = torch.optim.AdamW(model.parameters(), 
+                              lr=config.g_lr, 
+                              betas=(config.g_beta1, config.g_beta2), 
                               weight_decay=config.weight_decay)
-
 criterion = Tacotron2Loss(mel_loss_scale=1.0)
 
 # %%
-
 # resume from existing checkpoint
 n_epoch, n_iter = 0, 0
+
 if config.restore_model != '':
     state_dicts = torch.load(config.restore_model)
     model.load_state_dict(state_dicts['model'])
@@ -93,14 +90,6 @@ if config.restore_model != '':
         n_epoch = state_dicts['epoch']
     if 'iter' in state_dicts:
         n_iter = state_dicts['iter']
-# else:
-#     import torchaudio
-#     bundle = torchaudio.pipelines.TACOTRON2_WAVERNN_PHONE_LJSPEECH
-#     tacotron2 = bundle.get_tacotron2()
-#     tacotron2_sd = tacotron2.state_dict()
-#     tacotron2_sd.pop('embedding.weight')
-
-#     model.load_state_dict(tacotron2_sd, strict=False)
 
 # %%
 # tensorboard writer
@@ -108,11 +97,20 @@ writer = TBLogger(config.log_dir)
 
 # %%
 
+def trunc_batch(batch, N):
+    return (batch[0][:N], batch[1][:N], batch[2][:N],
+            batch[3][:N], batch[4][:N])
+
+# %% TRAINING LOOP
+
 model.train()
 
 for epoch in range(n_epoch, config.epochs):
     print(f"Epoch: {epoch}")
     for batch in train_loader:
+
+        if batch[-1][0] > 2000:
+            batch = trunc_batch(batch, 6)
 
         text_padded, input_lengths, mel_padded, gate_padded, \
             output_lengths = batch_to_device(batch, device)
@@ -121,13 +119,10 @@ for epoch in range(n_epoch, config.epochs):
                        mel_padded, output_lengths,
                        torch.zeros_like(output_lengths))
         mel_out, mel_out_postnet, gate_out, alignments = y_pred
-        
-        loss, meta = criterion(
-            mel_out, mel_out_postnet,
-            mel_padded, 
-            gate_out, gate_padded)    
-
-        meta['loss'] = loss.clone().detach()
+       
+        # GENERATOR
+        loss, meta = criterion(mel_out, mel_out_postnet, mel_padded,
+                               gate_out, gate_padded)  
 
         optimizer.zero_grad()
         loss.backward()
@@ -136,6 +131,8 @@ for epoch in range(n_epoch, config.epochs):
         optimizer.step()
 
         # LOGGING
+        meta['loss'] = loss.clone().detach()
+
         print(f"loss: {loss.item()}, grad_norm: {grad_norm.item()}")
 
         writer.add_training_data(meta, grad_norm.item(),
@@ -145,12 +142,12 @@ for epoch in range(n_epoch, config.epochs):
         if n_iter % config.n_save_states_iter == 0:
             save_states(f'states.pth', model, 
                         optimizer, n_iter, 
-                        epoch, config)
+                        epoch, None, config)
 
         if n_iter % config.n_save_backup_iter == 0 and n_iter > 0:
-            save_states(f'states_{n_iter}.pth', model,
+            save_states(f'states_{n_iter}.pth', model, 
                         optimizer, n_iter, 
-                        epoch, config)
+                        epoch, None, config)
 
         n_iter += 1
 
@@ -160,53 +157,8 @@ for epoch in range(n_epoch, config.epochs):
 
 
 save_states(f'states.pth', model,
-            optimizer, n_iter,
-            epoch, config)
+            optimizer, n_iter, 
+            epoch, None, config)
 
 
 # %%
-
-import sounddevice as sd
-import matplotlib.pyplot as plt
-from vocoder import load_hifigan
-from vocoder.hifigan.denoiser import Denoiser
-
-# %%
-vocoder = load_hifigan(config.vocoder_state_path, config.vocoder_config_path)
-vocoder = vocoder.to(device)
-denoiser = Denoiser(vocoder)
-
-test_dataset = ArabDataset(config.test_labels, config.test_wavs_path,
-                           cache=config.cache_dataset)
-
-
-# %%
-
-idx = 0
-fig, (ax1, ax2) = plt.subplots(2, 1)
-ax1.imshow(mel_out[idx].detach().cpu(), origin='lower', aspect='auto')
-ax2.imshow(mel_padded[idx].cpu(), origin='lower', aspect='auto')
-
-
-# %%
-
-model.eval()
-
-(phonemes, mel_log) = test_dataset[2]
-
-with torch.inference_mode():
-    (mel_out,
-     mel_specgram_lengths,
-     alignments) = model.infer(phonemes[None, :].to(device))
-
-    wave = vocoder(mel_out[0])
-    wave_enhan = denoiser(wave, 0.005)
-
-sd.play(0.3*wave[0].cpu(), 22050)
-# sd.play(0.3*wave_enhan[0].cpu(), 22050)
-
-plt.imshow(mel_out[0].cpu(), aspect='auto', origin='lower')
-
-# %%
-
-plt.imshow(alignments[0].cpu().t(), aspect='auto')

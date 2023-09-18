@@ -1,4 +1,4 @@
-from typing import List, Union, Optional
+from typing import List, Union, Optional, Literal
 
 import text
 import torch
@@ -11,6 +11,7 @@ from vocoder.hifigan.denoiser import Denoiser
 from .fastpitch.model import FastPitch as _FastPitch
 from ..diacritizers import load_vowelizer
 
+_VOWELIZER_TYPE = Literal['shakkala', 'shakkelha']
 
 def text_collate_fn(batch: List[torch.Tensor]):
     """
@@ -38,7 +39,7 @@ class FastPitch(_FastPitch):
     def __init__(self,
                  checkpoint: str,         
                  arabic_in: bool = True,
-                 vowelizer: Optional[str] = None,
+                 vowelizer: Optional[_VOWELIZER_TYPE] = None,
                  device: Optional[torch.device] = None,
                  **kwargs):
         from models.fastpitch import net_config
@@ -76,7 +77,7 @@ class FastPitch(_FastPitch):
         self.device = device
         return super().to(device=device, **kwargs)
     
-    def _vowelize(self, utterance: str, vowelizer: Optional[str] = None):
+    def _vowelize(self, utterance: str, vowelizer: Optional[_VOWELIZER_TYPE] = None):
         vowelizer = self.default_vowelizer if vowelizer is None else vowelizer
         if vowelizer is not None:
             if not vowelizer in self.vowelizers:
@@ -86,7 +87,7 @@ class FastPitch(_FastPitch):
             utterance = self.vowelizers[vowelizer].predict(utterance_ar)
         return utterance
 
-    def _tokenize(self, utterance: str, vowelizer: Optional[str] = None):
+    def _tokenize(self, utterance: str, vowelizer: Optional[_VOWELIZER_TYPE] = None):
         utterance = self._vowelize(utterance=utterance, vowelizer=vowelizer)
         if self.arabic_in:
             return text.arabic_to_tokens(utterance, append_space=False)
@@ -97,7 +98,7 @@ class FastPitch(_FastPitch):
                      utterance: str,
                      speed: float = 1,
                      speaker_id: int = 0,
-                     vowelizer: Optional[str] = None
+                     vowelizer: Optional[_VOWELIZER_TYPE] = None
                      ):
 
         tokens = self._tokenize(utterance, vowelizer=vowelizer)
@@ -118,7 +119,7 @@ class FastPitch(_FastPitch):
                     batch: List[str],
                     speed: float = 1,
                     speaker_id: int = 0,
-                    vowelizer: Optional[str] = None
+                    vowelizer: Optional[_VOWELIZER_TYPE] = None
                     ):
 
         batch_tokens = [self._tokenize(line, vowelizer=vowelizer) for line in batch]
@@ -152,7 +153,7 @@ class FastPitch(_FastPitch):
               speed: float = 1,
               speaker_id: int = 0,
               batch_size: int = 1,
-              vowelizer: Optional[str] = None
+              vowelizer: Optional[_VOWELIZER_TYPE] = None
               ):
         # input: string
         if isinstance(text_input, str):
@@ -197,7 +198,7 @@ class FastPitch2Wave(nn.Module):
                  model_sd_path: str,
                  vocoder_sd: Optional[str] = None,
                  vocoder_config: Optional[str] = None,
-                 vowelizer: Optional[str] = None,
+                 vowelizer: Optional[_VOWELIZER_TYPE] = None,
                  arabic_in: bool = True
                  ):
 
@@ -234,7 +235,7 @@ class FastPitch2Wave(nn.Module):
                    speed: float = 1,  
                    speaker_id: int = 0,
                    denoise: float = 0,   
-                   vowelizer: Optional[str] = None,                             
+                   vowelizer: Optional[_VOWELIZER_TYPE] = None,                             
                    return_mel=False):
 
         mel_spec = self.model.ttmel_single(text_buckw, speed, 
@@ -256,7 +257,7 @@ class FastPitch2Wave(nn.Module):
                   speed: float = 1,
                   speaker_id: int = 0,
                   denoise: float = 0,
-                  vowelizer: Optional[str] = None,
+                  vowelizer: Optional[_VOWELIZER_TYPE] = None,
                   return_mel: bool = False
                   ):
 
@@ -282,7 +283,7 @@ class FastPitch2Wave(nn.Module):
             denoise: float = 0, 
             speaker_id: int = 0,
             batch_size: int = 2,
-            vowelizer: Optional[str] = None,          
+            vowelizer: Optional[_VOWELIZER_TYPE] = None,          
             return_mel: bool = False):
         """
         Args:

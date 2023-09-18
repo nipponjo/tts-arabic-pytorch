@@ -1,0 +1,33 @@
+
+# restore_model: ''
+restore_model: ./pretrained/tacotron2_ar_adv.pth
+# restore_model: ./checkpoints/exp_tc2_adv/states.pth
+
+log_dir: logs/exp_tc2_adv
+checkpoint_dir: checkpoints/exp_tc2_adv
+
+# dataset
+train_wavs_path: G:/data/arabic-speech-corpus/wav_new
+train_labels: ./data/train_phon.txt
+
+test_wavs_path: G:/data/arabic-speech-corpus/test set/wav_new
+test_labels: ./data/test_phon.txt
+
+label_pattern: '"(?P<filename>.*)" "(?P<phonemes>.*)"'
+# label_pattern: (?P<arabic>.*)\|(?P<filestem>.*)
+
+# loss weights
+gan_loss_weight: 4.
+feat_loss_weight: 1.
+
+# optimizers
+g_lr: 1.0e-4    # lr for AdamW optimizer (generator)
+g_beta1: 0.     # beta1 for AdamW optimizer (generator)
+g_beta2: 0.99   # beta2 for AdamW optimizer (generator)
+
+d_lr: 1.0e-4    # lr for AdamW optimizer (discriminator)
+d_beta1: 0.     # beta1 for AdamW optimizer (discriminator)
+d_beta2: 0.99   # beta2 for AdamW optimizer (discriminator)
+
+n_save_states_iter: 10
+n_save_backup_iter: 1000

@@ -1,4 +1,4 @@
-from typing import List, Union, Optional
+from typing import List, Union, Optional, Literal
 
 import text
 import torch
@@ -12,6 +12,7 @@ from vocoder.hifigan.denoiser import Denoiser
 
 from ..diacritizers import load_vowelizer
 
+_VOWELIZER_TYPE = Literal['shakkala', 'shakkelha']
 
 def text_collate_fn(batch: List[torch.Tensor]):
     """
@@ -73,7 +74,7 @@ class Tacotron2(Tacotron2MS):
                  n_symbol: int = 40,
                  decoder_max_step: int = 3000,
                  arabic_in: bool = True,
-                 vowelizer: Optional[str] = None,
+                 vowelizer: Optional[_VOWELIZER_TYPE] = None,
                  device: Optional[torch.device] = None,
                  **kwargs):
         super().__init__(n_symbol=n_symbol,
@@ -110,7 +111,7 @@ class Tacotron2(Tacotron2MS):
         self.device = device
         return super().to(device=device, **kwargs)
     
-    def _vowelize(self, utterance: str, vowelizer: Optional[str] = None):
+    def _vowelize(self, utterance: str, vowelizer: Optional[_VOWELIZER_TYPE] = None):
         vowelizer = self.default_vowelizer if vowelizer is None else vowelizer
         if vowelizer is not None:
             if not vowelizer in self.vowelizers:
@@ -120,7 +121,7 @@ class Tacotron2(Tacotron2MS):
             utterance = self.vowelizers[vowelizer].predict(utterance_ar)
         return utterance
 
-    def _tokenize(self, utterance: str, vowelizer: Optional[str] = None):
+    def _tokenize(self, utterance: str, vowelizer: Optional[_VOWELIZER_TYPE] = None):
         utterance = self._vowelize(utterance=utterance, vowelizer=vowelizer)
         if self.arabic_in:
             return text.arabic_to_tokens(utterance)
@@ -131,7 +132,7 @@ class Tacotron2(Tacotron2MS):
                      utterance: str,                  
                      speaker_id: int = 0,
                      speed: Union[int, float, None] = None,
-                     vowelizer: Optional[str] = None,
+                     vowelizer: Optional[_VOWELIZER_TYPE] = None,
                      postprocess_mel: bool = True,                     
                      ):
 
@@ -162,7 +163,7 @@ class Tacotron2(Tacotron2MS):
                     batch: List[str],
                     speaker_id: int = 0,
                     speed: Union[int, float, None] = None,
-                    vowelizer: Optional[str] = None,
+                    vowelizer: Optional[_VOWELIZER_TYPE] = None,
                     postprocess_mel: bool = True                    
                     ):
 
@@ -217,7 +218,7 @@ class Tacotron2(Tacotron2MS):
               speaker_id: int = 0,
               speed: Union[int, float, None] = None,
               batch_size: int = 8,
-              vowelizer: Optional[str] = None,
+              vowelizer: Optional[_VOWELIZER_TYPE] = None,
               postprocess_mel: bool = True
               ):
         # input: string
@@ -263,7 +264,7 @@ class Tacotron2Wave(nn.Module):
                  model_sd_path: str,
                  vocoder_sd: Optional[str] = None,
                  vocoder_config: Optional[str] = None,
-                 vowelizer: Optional[str] = None,
+                 vowelizer: Optional[_VOWELIZER_TYPE] = None,
                  arabic_in: bool = True,
                  n_symbol: int = 40
                  ):
@@ -298,7 +299,7 @@ class Tacotron2Wave(nn.Module):
                    speed: Union[int, float, None] = None,
                    speaker_id: int = 0,
                    denoise: float = 0,
-                   vowelizer: Optional[str] = None,
+                   vowelizer: Optional[_VOWELIZER_TYPE] = None,
                    postprocess_mel: bool = True,
                    return_mel: bool = False
                    ):
@@ -323,7 +324,7 @@ class Tacotron2Wave(nn.Module):
                   speed: Union[int, float, None] = None,
                   denoise: float = 0,
                   speaker_id: int = 0,
-                  vowelizer: Optional[str] = None,          
+                  vowelizer: Optional[_VOWELIZER_TYPE] = None,          
                   postprocess_mel: bool = True,
                   return_mel: bool = False
                   ):
@@ -351,7 +352,7 @@ class Tacotron2Wave(nn.Module):
             denoise: float = 0,
             speaker_id: int = 0,
             batch_size: int = 8,
-            vowelizer: Optional[str] = None,
+            vowelizer: Optional[_VOWELIZER_TYPE] = None,
             postprocess_mel: bool = True,
             return_mel: bool = False
             ):

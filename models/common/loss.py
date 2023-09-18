@@ -2,22 +2,41 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from torch import Tensor
+from typing import Optional, List
 
-def extract_chunks(A, mel_ids, ofx, tar_len=128):
-    ids = torch.arange(0, tar_len, device=A.device)[
-        None, :].repeat(len(mel_ids), 1) + ofx[:, None]
-    ids = ids + mel_ids[:, None] * A.size(-1)
+
+def extract_chunks(A: Tensor, 
+                   ofx: Tensor, 
+                   mel_ids: Optional[Tensor] = None, 
+                   chunk_len: int = 128):
+    """
+    Args:
+        A (Tensor): spectrograms [B, F, T]
+        ofx (Tensor): offsets [num_chunks,]
+        mel_ids (Tensor): [num_chunks,]
+    Returns:
+        chunks (Tensor): [num_chunks, F, chunk_len]
+    """
+    ids = torch.arange(0, chunk_len, device=A.device)[None,:].repeat(len(mel_ids), 1) + ofx[:,None]
+
+    if mel_ids is None:
+        mel_ids = torch.arange(0, A.size(0), device=A.device)[:,None] * A.size(2)
+    ids = ids + mel_ids[:,None] * A.size(2)
 
     chunks = A.transpose(0, 1).flatten(1)[:, ids.long()].transpose(0, 1)
-
     return chunks
 
 
-def calc_fmatch_loss(fmaps_gen, fmaps_org):
-    loss_fmatch = 0
+def calc_feature_match_loss(fmaps_gen: List[Tensor],
+                            fmaps_org: List[Tensor]
+                            ):
+    
+    loss_fmatch = 0.
     for (fmap_gen, fmap_org) in zip(fmaps_gen, fmaps_org):
         fmap_org.detach_()
         loss_fmatch += (fmap_gen - fmap_org).abs().mean()
+
     loss_fmatch = loss_fmatch / len(fmaps_gen)
     return loss_fmatch
 
@@ -25,8 +44,10 @@ def calc_fmatch_loss(fmaps_gen, fmaps_org):
 class Conv2DSpectralNorm(nn.Conv2d):
     """Convolution layer that applies Spectral Normalization before every call."""
 
-    def __init__(self, cnum_in,
-                 cnum_out, kernel_size, stride, padding=0, n_iter=1, eps=1e-12, bias=True):
+    def __init__(self, cnum_in: int, cnum_out: int, 
+                 kernel_size: int, stride: int, padding: int = 0, 
+                 n_iter: int = 1, eps: float = 1e-12, 
+                 bias: bool = True):
         super().__init__(cnum_in,
                          cnum_out, kernel_size=kernel_size,
                          stride=stride, padding=padding, bias=bias)
@@ -53,6 +74,7 @@ class Conv2DSpectralNorm(nn.Conv2d):
 
         return x
 
+
 class DConv(nn.Module):
     def __init__(self, cnum_in,
                  cnum_out, ksize=5, stride=2, padding='auto'):
@@ -69,7 +91,7 @@ class DConv(nn.Module):
         return x
 
 
-class Discriminator3(nn.Module):
+class PatchDiscriminator(nn.Module):
     def __init__(self, cnum_in, cnum):
         super().__init__()
         self.conv1 = DConv(cnum_in, cnum)

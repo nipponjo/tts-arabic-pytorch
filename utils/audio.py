@@ -4,15 +4,16 @@ from librosa.filters import mel as librosa_mel_fn
 
 
 class MelSpectrogram(nn.Module):
-    def __init__(self, sample_rate=22050,
-                 n_fft=1024,
-                 win_length=1024,
-                 hop_length=256,
-                 n_mels=80,
-                 f_min=0,
-                 f_max=8000.0,
-                 norm='slaney',
-                 center=False
+    def __init__(self, 
+                 sample_rate: int = 22050,
+                 n_fft: int = 1024,
+                 win_length: int = 1024,
+                 hop_length: int = 256,
+                 n_mels: int = 80,
+                 f_min: float = 0,
+                 f_max: float = 8000.0,
+                 norm: str = 'slaney',
+                 center: bool = False
                  ):
         super().__init__()
         self.sample_rate = sample_rate
@@ -34,12 +35,12 @@ class MelSpectrogram(nn.Module):
     def forward(self, x):
         x_pad = torch.nn.functional.pad(
             x, (self.pad_length, self.pad_length), mode='reflect')
-        spec_ta = torch.stft(x_pad, self.n_fft,
-                             self.hop_length,
-                             self.win_length,
-                             self.window_fn,
-                             center=self.center,
-                             return_complex=False)
-        spec_ta = torch.sqrt(spec_ta.pow(2).sum(-1) + 1e-9)
-        mel_ta2 = torch.matmul(self.mel_basis, spec_ta)
-        return mel_ta2
+        spec_lin = torch.stft(x_pad, self.n_fft,
+                              self.hop_length,
+                              self.win_length,
+                              self.window_fn,
+                              center=self.center,
+                              return_complex=True) # [B, F, T]
+        spec_mag = spec_lin.abs().pow_(2).add_(1e-9).sqrt_()
+        spec_mel = torch.matmul(self.mel_basis, spec_mag) # [B, mels, T]
+        return spec_mel

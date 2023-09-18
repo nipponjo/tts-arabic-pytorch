@@ -1,10 +1,10 @@
 
 # restore_model: ''
 restore_model: ./pretrained/fastpitch_ar_adv.pth
-# restore_model: ./checkpoints/exp_fp/states.pth
+# restore_model: ./checkpoints/exp_fp_adv/states.pth
 
-log_dir: logs/exp_fp
-checkpoint_dir: checkpoints/exp_fp
+log_dir: logs/exp_fp_adv
+checkpoint_dir: checkpoints/exp_fp_adv
 
 # dataset
 train_wavs_path: G:/data/arabic-speech-corpus/wav_new
@@ -22,14 +22,22 @@ f0_dict_path: ./data/pitch_dict.pt
 f0_mean: 130.05478
 f0_std: 22.86267
 
+# loss weights
+gan_loss_weight: 3.
+feat_loss_weight: 1.
+
 # batch sizes
 max_lengths: [1000, 1300, 1850, 30000] # 1 frame ≈ 11.6ms
 batch_sizes: [10, 8, 6, 4]
 
 # optimizers
 g_lr: 1.0e-4    # lr for AdamW optimizer (generator)
-g_beta1: 0.9     # beta1 for AdamW optimizer (generator)
-g_beta2: 0.999   # beta2 for AdamW optimizer (generator)
+g_beta1: 0.     # beta1 for AdamW optimizer (generator)
+g_beta2: 0.99   # beta2 for AdamW optimizer (generator)
+
+d_lr: 1.0e-4    # lr for AdamW optimizer (discriminator)
+d_beta1: 0.     # beta1 for AdamW optimizer (discriminator)
+d_beta2: 0.99   # beta2 for AdamW optimizer (discriminator)
 
 n_save_states_iter: 100
 n_save_backup_iter: 1000

@@ -1,60 +1,64 @@
 # %%
-import librosa
-import torch
-import glob
 import os
-from tqdm import tqdm
+import torch
+import librosa
 import numpy as np
-from utils.audio import MelSpectrogram
 import torch.nn.functional as F
 
-# %%
+from tqdm import tqdm
+from utils.audio import MelSpectrogram
+from utils import write_lines_to_file
 
-waves = glob.glob('G:/data/arabic-speech-corpus/wav_new/*.wav')
+# %% CONFIG
+
+wavs_path = 'G:/data/arabic-speech-corpus/wav_new'
+
+waves = [f.path for f in os.scandir(wavs_path) if f.path.endswith('.wav')]
+print(f"{len(waves)} wave files found at {wavs_path}")
 
 mel_trf = MelSpectrogram()
 
-wav_f0_dict = {}
+# %% extract pitch (f0) values
 
-# %%
+pitch_dict = {}
 
-for i, wav_path in tqdm(enumerate(waves)):
-    wav, sr = librosa.load(wav_path, sr=22050)
+for i, wav_path in tqdm(enumerate(waves), total=len(waves)):
+    wav, sr = librosa.load(wav_path, sr=mel_trf.sample_rate)
 
     wav_name = os.path.basename(wav_path)
-    if wav_name in wav_f0_dict:
+    if wav_name in pitch_dict:
         continue
+    mel_spec = mel_trf(torch.tensor(wav)[None])[0] # [mel_bands, T]
 
+    # estimate pitch
     pitch_mel, voiced_flag, voiced_probs = librosa.pyin(
-        wav, fmin=librosa.note_to_hz('C2'),
-        fmax=librosa.note_to_hz('C7'), frame_length=1024)
+        wav, sr=mel_trf.sample_rate,
+        fmin=librosa.note_to_hz('C2'),
+        fmax=librosa.note_to_hz('C7'),
+        frame_length=mel_trf.win_length,
+        hop_length=mel_trf.hop_length)
 
-    mel_log = mel_trf(torch.tensor(wav)[None,:])
+    pitch_mel = np.where(np.isnan(pitch_mel), 0., pitch_mel) # set nan to zero
+    pitch_mel = torch.from_numpy(pitch_mel)
+    pitch_mel = F.pad(pitch_mel, (0, mel_spec.size(1) - pitch_mel.size(0))) # pad to mel length
 
-    pitch_mel = np.where(np.isnan(pitch_mel), 0.0, pitch_mel)
-    pitch_mel = torch.from_numpy(pitch_mel).unsqueeze(0)
-    pitch_mel = F.pad(pitch_mel, (0, mel_log.size(-1) - pitch_mel.size(1)))
+    pitch_dict[wav_name] = pitch_mel
 
-    wav_f0_dict[wav_name] = pitch_mel
+    if i % 10 == 0: # save intermediate dict
+        torch.save(pitch_dict, './data/pitch_dict.pt')
 
-    if i % 10 == 0:
-        torch.save(wav_f0_dict, './data/wav_f0_dict.pt')
-
-torch.save(wav_f0_dict, './data/wav_f0_dict.pt')
+torch.save(pitch_dict, './data/pitch_dict.pt')
 
 
+# %% calculate pitch mean and std
 
-# %%
-import torch
-import numpy as np
-
-wav_f0_dict = torch.load('./data/pitch_dict2.pt')
+pitch_dict = torch.load('./data/pitch_dict.pt')
 
 rmean = 0
 rvar = 0
 ndata = 0
 
-for pitch_mel in wav_f0_dict.values():   
+for pitch_mel in pitch_dict.values():   
     pitch_mel = np.where(np.isnan(pitch_mel), 0.0, pitch_mel)
     
     pitch_mel_ = pitch_mel[pitch_mel > 1]
@@ -69,7 +73,10 @@ for pitch_mel in wav_f0_dict.values():
 
     ndata += p_len
 
-print('mean ', rmean)
-print('std ', np.sqrt(rvar))
+mean, std = rmean, np.sqrt(rvar)
+print('mean ', mean)
+print('std ', std)
 
-# %%
+write_lines_to_file(path='./data/mean_std.txt', 
+                    lines=[f"mean: {mean}", 
+                           f"std: {std}"])

@@ -3,6 +3,34 @@ import torch
 import torch.nn.functional as F
 
 
+def save_states(fname, 
+                model, 
+                optimizer,
+                n_iter, epoch, 
+                net_config, config):
+    torch.save({'model': model.state_dict(),
+                'optim': optimizer.state_dict(),
+                'epoch': epoch,
+                'iter': n_iter,
+                'config': net_config,
+                },
+               f'{config.checkpoint_dir}/{fname}')
+
+def save_states_gan(fname, 
+                    model, model_d, 
+                    optimizer, optimizer_d, 
+                    n_iter, epoch, 
+                    net_config, config):
+    torch.save({'model': model.state_dict(),
+                'model_d': model_d.state_dict(),                
+                'optim': optimizer.state_dict(),
+                'optim_d': optimizer_d.state_dict(),
+                'epoch': epoch, 'iter': n_iter,
+                'config': net_config,
+                },
+               f'{config.checkpoint_dir}/{fname}')
+    
+
 def batch_to_device(batch, device):
     text_padded, input_lengths, mel_padded, gate_padded, \
         output_lengths = batch
@@ -57,11 +85,3 @@ def validate(model, test_loader, writer, device, n_iter):
 
     return val_loss
 
-
-def save_states(fname, model, optimizer, n_iter, epoch, config):
-    torch.save({'model': model.state_dict(),
-                'optim': optimizer.state_dict(),
-                'epoch': epoch,
-                'iter': n_iter,
-                },
-               f'{config.checkpoint_dir}/{fname}')
