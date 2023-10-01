@@ -66,6 +66,14 @@ def remove_silence(energy_per_frame: torch.Tensor,
         i -= 1
     return keep
 
+def make_dataset_from_subdirs(folder_path):
+    samples = []
+    for root, _, fnames in os.walk(folder_path, followlinks=True):
+        for fname in fnames:
+            if fname.endswith('.wav'):
+                samples.append(os.path.join(root, fname))
+
+    return samples
 
 def _process_line(label_pattern: str, line: str):        
     match = re.search(label_pattern, line)
@@ -78,6 +86,8 @@ def _process_line(label_pattern: str, line: str):
         phonemes = text.arabic_to_phonemes(res_dict['arabic'])
     elif 'phonemes' in res_dict:
         phonemes = res_dict['phonemes']
+    elif 'buckwalter' in res_dict:
+        phonemes = text.buckwalter_to_phonemes(res_dict['buckwalter'])
     
     if 'filename' in res_dict:
         filename = res_dict['filename']
@@ -92,12 +102,14 @@ class ArabDataset(Dataset):
                  txtpath: str = 'tts data sample/text.txt',
                  wavpath: str = './',
                  label_pattern: str = '"(?P<filename>.*)" "(?P<phonemes>.*)"',
+                 sr_target: int = 22050
                  ):
         super().__init__()
 
         self.mel_fn = MelSpectrogram()
         self.wav_path = wavpath
         self.label_pattern = label_pattern
+        self.sr_target = sr_target
 
         self.data = self._process_textfile(txtpath)
     
@@ -132,7 +144,9 @@ class ArabDataset(Dataset):
         return phoneme_mel_list
 
     def _get_mel_from_fpath(self, fpath):
-        wave, _ = torchaudio.load(fpath)
+        wave, sr = torchaudio.load(fpath)
+        if sr != self.sr_target:
+            wave = torchaudio.functional.resample(wave, sr, self.sr_target, 64)
 
         mel_raw = self.mel_fn(wave)
         mel_log = mel_raw.clamp_min(1e-5).log().squeeze()

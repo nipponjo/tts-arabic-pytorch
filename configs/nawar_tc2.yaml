@@ -17,9 +17,9 @@ label_pattern: '"(?P<filename>.*)" "(?P<phonemes>.*)"'
 # label_pattern: (?P<arabic>.*)\|(?P<filestem>.*)
 
 # optimizers
-g_lr: 1.0e-4    # lr for AdamW optimizer (generator)
-g_beta1: 0.     # beta1 for AdamW optimizer (generator)
-g_beta2: 0.99   # beta2 for AdamW optimizer (generator)
+g_lr: 1.0e-3    # lr for AdamW optimizer (generator)
+g_beta1: 0.9     # beta1 for AdamW optimizer (generator)
+g_beta2: 0.999   # beta2 for AdamW optimizer (generator)
 
 n_save_states_iter: 10
 n_save_backup_iter: 1000

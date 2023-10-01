@@ -35,7 +35,7 @@ vocoder_config_path: pretrained/hifigan-asc-v1/config.json
 
 This repo includes the diacritization models [Shakkala](https://github.com/Barqawiz/Shakkala) and [Shakkelha](https://github.com/AliOsm/shakkelha). 
 
-The weights can be downloaded [here](https://drive.google.com/u/1/uc?id=1MIZ_t7pqAQP-R3vwWWQTJMER8yPm1uB1&export=download). There also exists a [separate repo](https://github.com/nipponjo/arabic-vocalization).
+The weights can be downloaded [here](https://drive.google.com/u/1/uc?id=1MIZ_t7pqAQP-R3vwWWQTJMER8yPm1uB1&export=download). There also exists a [separate repo](https://github.com/nipponjo/arabic-vocalization) and [package](https://github.com/nipponjo/arabic_vocalizer).
 
 -> Alternatively, [download all models](https://drive.google.com/u/1/uc?id=1FD2J-xUk48JPF9TeS8ZKHzDC_ZNBfLd8&export=download) and put the content of the zip file into the `pretrained` folder.
 
