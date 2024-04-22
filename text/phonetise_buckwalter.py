@@ -99,6 +99,8 @@ forwardEmphatics = [u'g', u'x']
 consonants = [u'>', u'<', u'}', u'&', u'\'', u'b', u't', u'^', u'j', u'H', u'x', u'd', u'*', u'r',
               u'z', u's', u'$', u'S', u'D', u'T', u'Z', u'E', u'g', u'f', u'q', u'k', u'l', u'm', u'n', u'h', u'|']
 
+punctuation = ['.', ',', '?', '!']
+
 # ------------------------------------------------------------------------------------
 # Words with fixed irregular pronunciations-------------------------------------------
 # ------------------------------------------------------------------------------------
@@ -176,8 +178,6 @@ def preprocess_utterance(utterance):
     utterance = utterance.replace('a~', '~a') 
     utterance = utterance.replace('u~', '~u')
 
-    utterance = utterance.replace('lA~a', 'l~aA')
-
     # Deal with Hamza types that when not followed by a short vowel letter,
     # this short vowel is added automatically
     utterance = re.sub(u'Ai', u'<i', utterance)
@@ -186,12 +186,18 @@ def preprocess_utterance(utterance):
     utterance = re.sub(u'^>([^auAw])', u'>a\\1', utterance)
     utterance = re.sub(u' >([^auAw ])', u' >a\\1', utterance)
     utterance = re.sub(u'<([^i])', u'<i\\1', utterance)
+
+    utterance = re.sub("(\S)(\.|\?|,|!)", "\\1 \\2", utterance)
+
     utterance = utterance.split(u' ')
 
     return utterance
 
 
 def process_word(word):
+
+    if word in punctuation:
+        return word
 
     pronunciations = []  # Start with empty set of possible pronunciations of current word
     # Add fixed irregular pronuncations if possible
@@ -383,7 +389,10 @@ def process_utterance(utterance):
             continue
 
         phonemes_word = process_word(word)
-        phonemes.append(phonemes_word)
+        if phonemes_word in punctuation and phonemes:
+            phonemes[-1] += phonemes_word
+        else:
+            phonemes.append(phonemes_word)
 
     final_sequence = ' + '.join(' '.join(phon for phon in phones)
                                 for phones in phonemes)

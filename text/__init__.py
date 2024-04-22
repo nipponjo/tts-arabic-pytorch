@@ -18,10 +18,12 @@ vowel_map = {
     'i0': 'i', 'i1': 'i', 'I0': 'i', 'I1': 'i'
 }
 
-phon_to_id = {phon: i for i, phon in enumerate(symbols)}
+phon_to_id_ = {phon: i for i, phon in enumerate(symbols)}
 
 
-def tokens_to_ids(phonemes):
+def tokens_to_ids(phonemes, phon_to_id=None):
+    if phon_to_id is None:
+        return [phon_to_id_[phon] for phon in phonemes]
     return [phon_to_id[phon] for phon in phonemes]
 
 

@@ -28,22 +28,22 @@ def load_models():
         else:
             print(f"Model type: {model_dict['type']} not supported")
             continue
-        model.cuda()
-        model.eval()
 
         models.append((model_name, model))
     
     return models
 
 class TTSManager:
-    def __init__(self, out_dir):
+    def __init__(self, out_dir, 
+                 use_cuda_if_available = True,
+                 sample_rate = 22_050):
 
         if not os.path.exists(out_dir):
             os.makedirs(out_dir)
             print(f"Created folder: {out_dir}")
-
-        device = torch.device('cuda'
-                              if torch.cuda.is_available() else 'cpu')
+        
+        device = torch.device(
+            'cuda' if torch.cuda.is_available() and use_cuda_if_available else 'cpu')
 
         self.vocoder = load_hifigan(config.vocoder_state_path, 
                                     config.vocoder_config_path)
@@ -51,9 +51,10 @@ class TTSManager:
         self.vocoder.to(device)
         self.denoiser.to(device)
 
-        self.sample_rate = 22_050
+        self.sample_rate = sample_rate
         self.models = load_models()
         self.out_dir = out_dir
+        self.device = device
 
     @torch.inference_mode()
     def tts(self, text_buckw, speed=1, denoise=0.01):
@@ -61,7 +62,7 @@ class TTSManager:
         response_data = []
 
         for i, (model_name, model) in enumerate(self.models):
-            model.cuda()
+            model.to(self.device)
             mel_spec = model.ttmel(text_buckw, speed=speed)
             wave = self.vocoder(mel_spec)
             wave_den = self.denoiser(wave, denoise)
@@ -70,7 +71,7 @@ class TTSManager:
             wave_den *= 0.99
 
             torchaudio.save(f'./app/static/wave{i}.wav',
-                        wave_den.cpu(), 22050)
+                        wave_den.cpu(), self.sample_rate)
 
             response_data.append({
                 'name': model_name,

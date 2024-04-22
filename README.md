@@ -1,6 +1,6 @@
 # tts-arabic-pytorch
 
-TTS models (Tacotron2, FastPitch), trained on Nawar Halabi's [Arabic Speech Corpus](http://en.arabicspeechcorpus.com/), including the [HiFi-GAN vocoder](https://github.com/jik876/hifi-gan) for direct TTS inference.
+TTS models (Tacotron2, FastPitch), trained on [Nawar Halabi](https://github.com/nawarhalabi)'s [Arabic Speech Corpus](http://en.arabicspeechcorpus.com/), including the [HiFi-GAN vocoder](https://github.com/jik876/hifi-gan) for direct TTS inference.
 
 <div align="center">
   <img src="https://user-images.githubusercontent.com/28433296/227660976-0d1e2033-276e-45e5-b232-a5a9b6b3f2a8.png" width="95%"></img>
@@ -17,6 +17,13 @@ HiFi-GAN  | HiFi-GAN: Generative Adversarial Networks for Efficient and High Fid
 ## Audio Samples
 
 You can listen to some audio samples [here](https://nipponjo.github.io/tts-arabic-samples).
+
+## Multispeaker model (in progress)
+Multispeaker weights are available for the FastPitch model.
+Currently, another male voice and two female voices have been added.
+Audio samples can be found [here](https://nipponjo.github.io/tts-arabic-speakers). Download weights [here](https://drive.google.com/u/0/uc?id=18IYUSRXvLErVjaDORj_TKzUxs90l61Ja&export=download).
+
+The multispeaker dataset was created by synthesizing data with [Coqui](https://github.com/coqui-ai)'s [XTTS-v2](https://huggingface.co/coqui/XTTS-v2) model and a mix of voices from the [Tunisian_MSA](https://www.openslr.org/46/) dataset.
 
 ## Quick Setup
 The models were trained with the mse loss as described in the papers. I also trained the models using an additional adversarial loss (adv). The difference is not large, but I think that the (adv) version often sounds a bit clearer. You can compare them yourself.

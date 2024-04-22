@@ -11,23 +11,23 @@ from vocoder.hifigan.denoiser import Denoiser
 from utils import get_basic_config
 
 #default:
-#python test.py --model fastpitch --checkpoint pretrained/fastpitch_ar_adv.pth --out_dir samples/test
+# python test.py --model fastpitch --checkpoint pretrained/fastpitch_ar_adv.pth --out_dir samples/test
 
 # Examples:
-#python test.py --model fastpitch --checkpoint pretrained/fastpitch_ar_adv.pth --out_dir samples/test_fp_adv
-#python test.py --model fastpitch --checkpoint pretrained/fastpitch_ar_adv.pth --denoise 0.01 --out_dir samples/test_fp_adv_d
-#python test.py --model fastpitch --checkpoint pretrained/fastpitch_ar_mse.pth --out_dir samples/test_fp_mse
+# python test.py --model fastpitch --checkpoint pretrained/fastpitch_ar_adv.pth --out_dir samples/test_fp_adv
+# python test.py --model fastpitch --checkpoint pretrained/fastpitch_ar_adv.pth --denoise 0.01 --out_dir samples/test_fp_adv_d
+# python test.py --model fastpitch --checkpoint pretrained/fastpitch_ar_mse.pth --out_dir samples/test_fp_mse
 
-#python test.py --model tacotron2 --checkpoint pretrained/tacotron2_ar_adv.pth --out_dir samples/test_tc2_adv
-#python test.py --model tacotron2 --checkpoint pretrained/tacotron2_ar_adv.pth --denoise 0.01 --out_dir samples/test_tc2_adv_d
-#python test.py --model tacotron2 --checkpoint pretrained/tacotron2_ar_mse.pth --out_dir samples/test_tc2_mse
+# python test.py --model tacotron2 --checkpoint pretrained/tacotron2_ar_adv.pth --out_dir samples/test_tc2_adv
+# python test.py --model tacotron2 --checkpoint pretrained/tacotron2_ar_adv.pth --denoise 0.01 --out_dir samples/test_tc2_adv_d
+# python test.py --model tacotron2 --checkpoint pretrained/tacotron2_ar_mse.pth --out_dir samples/test_tc2_mse
 
 
-def test(args, text_arabic):
+def test(args, text_arabic):    
 
-    config = get_basic_config()
-
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    use_cuda_if_available = not args.cpu
+    device = torch.device(
+        'cuda' if torch.cuda.is_available() and use_cuda_if_available else 'cpu')
     out_dir = args.out_dir
     sample_rate = 22_050
 
@@ -45,10 +45,14 @@ def test(args, text_arabic):
     model.eval()
 
     # Load vocoder model
+    if args.vocoder_sd is None or args.vocoder_config is None:
+        config = get_basic_config()
+        if args.vocoder_sd is None: args.vocoder_sd = config.vocoder_state_path
+        if args.vocoder_config is None: args.vocoder_config = config.vocoder_config_path
     vocoder = load_hifigan(
-        state_dict_path=config.vocoder_state_path,
-        config_file=config.vocoder_config_path)
-    print(f'Loaded vocoder from: {config.vocoder_state_path}')
+        state_dict_path=args.vocoder_sd,
+        config_file=args.vocoder_config)
+    print(f'Loaded vocoder from: {args.vocoder_sd}')
 
     model, vocoder = model.to(device), vocoder.to(device)
     denoiser = Denoiser(vocoder)
@@ -98,10 +102,13 @@ def main():
                         default="أَلسَّلامُ عَلَيكُم يا صَديقي")
     parser.add_argument('--model', type=str, default='fastpitch')
     parser.add_argument(
-        '--checkpoint', default='pretrained/fastpitch_ar_adv.pth')  
+        '--checkpoint', default='pretrained/fastpitch_ar_adv.pth') 
+    parser.add_argument('--vocoder_sd', type=str, default=None)
+    parser.add_argument('--vocoder_config', type=str, default=None)  
     parser.add_argument('--denoise', type=float, default=0)  
     parser.add_argument('--out_dir', default='samples/test')
     parser.add_argument('--vowelizer', default=None)
+    parser.add_argument('--cpu', action='store_true')
 
     parser.add_argument('--do_not_play', action='store_true')   
     args = parser.parse_args()

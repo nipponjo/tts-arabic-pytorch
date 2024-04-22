@@ -74,8 +74,7 @@ class Tacotron2(Tacotron2MS):
                  n_symbol: int = 40,
                  decoder_max_step: int = 3000,
                  arabic_in: bool = True,
-                 vowelizer: Optional[_VOWELIZER_TYPE] = None,
-                 device: Optional[torch.device] = None,
+                 vowelizer: Optional[_VOWELIZER_TYPE] = None,               
                  **kwargs):
         super().__init__(n_symbol=n_symbol,
                          decoder_max_step=decoder_max_step,
@@ -84,8 +83,8 @@ class Tacotron2(Tacotron2MS):
         self.arabic_in = arabic_in
 
         if checkpoint is not None:
-            sds = torch.load(checkpoint)
-            self.load_state_dict(sds['model'])
+            state_dicts = torch.load(checkpoint, map_location='cpu')
+            self.load_state_dict(state_dicts['model'])
         
         self.config = get_basic_config()
         
@@ -94,22 +93,16 @@ class Tacotron2(Tacotron2MS):
             self.vowelizers[vowelizer] = load_vowelizer(vowelizer, self.config)
         self.default_vowelizer = vowelizer
 
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') \
-            if device is None else device
+        self.phon_to_id = None
+        if checkpoint is not None and 'symbols' in state_dicts:
+            self.phon_to_id = {phon: i for i, phon in enumerate(state_dicts['symbols'])}
+
 
         self.eval()
 
-    def cuda(self):        
-        self.device = torch.device('cuda')
-        return super().cuda()
-
-    def cpu(self):        
-        self.device = torch.device('cpu')
-        return super().cpu()
-
-    def to(self, device=None, **kwargs):        
-        self.device = device
-        return super().to(device=device, **kwargs)
+    @property
+    def device(self):
+        return next(self.parameters()).device
     
     def _vowelize(self, utterance: str, vowelizer: Optional[_VOWELIZER_TYPE] = None):
         vowelizer = self.default_vowelizer if vowelizer is None else vowelizer
@@ -143,7 +136,7 @@ class Tacotron2(Tacotron2MS):
             tokens.insert(-self.n_eos, SEPARATOR_TOKEN)
             process_mel = True
 
-        token_ids = text.tokens_to_ids(tokens)
+        token_ids = text.tokens_to_ids(tokens, self.phon_to_id)
         ids_batch = torch.LongTensor(token_ids).unsqueeze(0).to(self.device)
         sid = torch.LongTensor([speaker_id]).to(self.device)
 
@@ -178,8 +171,9 @@ class Tacotron2(Tacotron2MS):
                     process_mel = True
                 list_postprocess.append(process_mel)
 
-        batch_ids = [torch.LongTensor(text.tokens_to_ids(tokens))
-                     for tokens in batch_tokens]
+        batch_ids = [torch.LongTensor(
+            text.tokens_to_ids(tokens, self.phon_to_id)
+            ) for tokens in batch_tokens]
 
         batch = text_collate_fn(batch_ids)
         (
@@ -275,7 +269,7 @@ class Tacotron2Wave(nn.Module):
                           arabic_in=arabic_in, 
                           vowelizer=vowelizer)
 
-        state_dicts = torch.load(model_sd_path)
+        state_dicts = torch.load(model_sd_path, map_location='cpu')
         model.load_state_dict(state_dicts['model'])
         self.model = model
 
@@ -289,6 +283,10 @@ class Tacotron2Wave(nn.Module):
         self.denoiser = Denoiser(vocoder)
 
         self.eval()
+
+    @property
+    def device(self):
+        return next(self.parameters()).device
 
     def forward(self, x):
         return x

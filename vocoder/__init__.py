@@ -12,7 +12,7 @@ def load_hifigan(state_dict_path, config_file):
     h = AttrDict(json_config)
 
     generator = Generator(h)    
-    state_dict_g = torch.load(state_dict_path)
+    state_dict_g = torch.load(state_dict_path, map_location='cpu')
     generator.load_state_dict(state_dict_g['generator'])
 
     generator.eval()

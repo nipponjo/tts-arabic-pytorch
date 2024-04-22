@@ -39,19 +39,18 @@ class FastPitch(_FastPitch):
     def __init__(self,
                  checkpoint: str,         
                  arabic_in: bool = True,
-                 vowelizer: Optional[_VOWELIZER_TYPE] = None,
-                 device: Optional[torch.device] = None,
+                 vowelizer: Optional[_VOWELIZER_TYPE] = None,              
                  **kwargs):
         from models.fastpitch import net_config
-        sds = torch.load(checkpoint)
-        if 'config' in sds:
-            net_config = sds['config']
+        state_dicts = torch.load(checkpoint, map_location='cpu')
+        if 'config' in state_dicts:
+            net_config = state_dicts['config']
         super().__init__(**net_config)
         #self.n_eos = len(EOS_TOKENS)
         self.arabic_in = arabic_in
 
         #if checkpoint is not None:            
-        self.load_state_dict(sds['model'])
+        self.load_state_dict(state_dicts['model'])
 
         self.config = get_basic_config()
         
@@ -60,23 +59,16 @@ class FastPitch(_FastPitch):
             self.vowelizers[vowelizer] = load_vowelizer(vowelizer, self.config)
         self.default_vowelizer = vowelizer
 
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') \
-            if device is None else device
+        self.phon_to_id = None
+        if 'symbols' in state_dicts:
+            self.phon_to_id = {phon: i for i, phon in enumerate(state_dicts['symbols'])}
 
         self.eval()
+   
+    @property
+    def device(self):
+        return next(self.parameters()).device
 
-    def cuda(self):        
-        self.device = torch.device('cuda')
-        return super().cuda()
-
-    def cpu(self):        
-        self.device = torch.device('cpu')
-        return super().cpu()
-
-    def to(self, device: Optional[torch.device] = None, **kwargs):        
-        self.device = device
-        return super().to(device=device, **kwargs)
-    
     def _vowelize(self, utterance: str, vowelizer: Optional[_VOWELIZER_TYPE] = None):
         vowelizer = self.default_vowelizer if vowelizer is None else vowelizer
         if vowelizer is not None:
@@ -103,12 +95,14 @@ class FastPitch(_FastPitch):
 
         tokens = self._tokenize(utterance, vowelizer=vowelizer)
 
-        token_ids = text.tokens_to_ids(tokens)
+        token_ids = text.tokens_to_ids(tokens, self.phon_to_id)
         ids_batch = torch.LongTensor(token_ids).unsqueeze(0).to(self.device)
         sid = torch.LongTensor([speaker_id]).to(self.device)
 
-        # Infer spectrogram and wave      
-        mel_spec, *_ = self.infer(ids_batch, pace=speed)
+        # Infer spectrogram     
+        mel_spec, *_ = self.infer(ids_batch, 
+                                  pace=speed, 
+                                  speaker=speaker_id)
 
         mel_spec = mel_spec[0]
 
@@ -122,10 +116,14 @@ class FastPitch(_FastPitch):
                     vowelizer: Optional[_VOWELIZER_TYPE] = None
                     ):
 
-        batch_tokens = [self._tokenize(line, vowelizer=vowelizer) for line in batch]
+        batch_tokens = [
+            self._tokenize(line, vowelizer=vowelizer) 
+            for line in batch
+            ]
 
-        batch_ids = [torch.LongTensor(text.tokens_to_ids(tokens))
-                     for tokens in batch_tokens]
+        batch_ids = [torch.LongTensor(
+            text.tokens_to_ids(tokens, self.phon_to_id)
+            ) for tokens in batch_tokens]
 
         batch = text_collate_fn(batch_ids)
         (
@@ -138,7 +136,7 @@ class FastPitch(_FastPitch):
 
         batch_sids = batch_lens_sorted*0 + speaker_id
 
-        y_pred = self.infer(batch_ids_padded, pace=speed)     
+        y_pred = self.infer(batch_ids_padded, pace=speed, speaker=speaker_id)     
         mel_outputs, mel_specgram_lengths, *_ = y_pred
 
         mel_list = []
@@ -199,20 +197,20 @@ class FastPitch2Wave(nn.Module):
                  vocoder_sd: Optional[str] = None,
                  vocoder_config: Optional[str] = None,
                  vowelizer: Optional[_VOWELIZER_TYPE] = None,
-                 arabic_in: bool = True
+                 arabic_in: bool = True,           
                  ):
 
         super().__init__()
 
         # from models.fastpitch import net_config
-        state_dicts = torch.load(model_sd_path)
+        state_dicts = torch.load(model_sd_path, map_location='cpu')
         # if 'config' in state_dicts:
         #     net_config = state_dicts['config']
 
         model = FastPitch(model_sd_path, 
                           arabic_in=arabic_in,
                           vowelizer=vowelizer)       
-        model.load_state_dict(state_dicts['model'], strict=True)
+        model.load_state_dict(state_dicts['model'], strict=False)
         self.model = model
 
         if vocoder_sd is None or vocoder_config is None:
@@ -225,6 +223,10 @@ class FastPitch2Wave(nn.Module):
         self.denoiser = Denoiser(vocoder)
 
         self.eval()
+
+    @property
+    def device(self):
+        return next(self.parameters()).device
 
     def forward(self, x):
         return x
@@ -287,7 +289,7 @@ class FastPitch2Wave(nn.Module):
             return_mel: bool = False):
         """
         Args:
-            text_buckw (str|List[str]): Input text.
+            text_input (str|List[str]): Input text.
             speed (float): Speaking speed.
             denoise (float): Hifi-GAN Denoiser strength.
             speaker_id (int): Speaker Id.

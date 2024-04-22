@@ -8,24 +8,31 @@ import utils.make_html as html
 from utils import progbar, read_lines_from_file
 
 # default:
-#python inference.py --list data/infer_text.txt --out_dir samples/results --model fastpitch --checkpoint pretrained/fastpitch_ar_adv.pth --batch_size 2 --denoise 0
+# python inference.py --list data/infer_text.txt --out_dir samples/results --model fastpitch --checkpoint pretrained/fastpitch_ar_adv.pth --batch_size 2 --denoise 0
 
 # Examples:
-#python inference.py --list data/infer_text.txt --out_dir samples/res_tc2_adv0 --model tacotron2 --checkpoint pretrained/tacotron2_ar_adv.pth --batch_size 2
-#python inference.py --list data/infer_text.txt --out_dir samples/res_tc2_adv1 --model tacotron2 --checkpoint pretrained/tacotron2_ar_adv.pth --batch_size 2 --denoise 0.01
-#python inference.py --list data/infer_text.txt --out_dir samples/res_fp_adv0 --model fastpitch --checkpoint pretrained/fastpitch_ar_adv.pth --batch_size 2
-#python inference.py --list data/infer_text.txt --out_dir samples/res_fp_adv1 --model fastpitch --checkpoint pretrained/fastpitch_ar_adv.pth --batch_size 2 --denoise 0.01
+# python inference.py --list data/infer_text.txt --out_dir samples/res_tc2_adv0 --model tacotron2 --checkpoint pretrained/tacotron2_ar_adv.pth --batch_size 2
+# python inference.py --list data/infer_text.txt --out_dir samples/res_tc2_adv1 --model tacotron2 --checkpoint pretrained/tacotron2_ar_adv.pth --batch_size 2 --denoise 0.005
+# python inference.py --list data/infer_text.txt --out_dir samples/res_fp_adv0 --model fastpitch --checkpoint pretrained/fastpitch_ar_adv.pth --batch_size 2
+# python inference.py --list data/infer_text.txt --out_dir samples/res_fp_adv1 --model fastpitch --checkpoint pretrained/fastpitch_ar_adv.pth --batch_size 2 --denoise 0.005
+# python inference.py --list data/infer_text.txt --out_dir samples/res_fp_adv2 --model fastpitch --checkpoint pretrained/fastpitch_ar_adv.pth --batch_size 2 --denoise 0.005 --vocoder_sd pretrained/hifigan-asc-v1/g_02500000 --vocoder_config pretrained/hifigan-asc-v1/config.json
 
 
 def infer(args):
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    use_cuda_if_available = not args.cpu
+    device = torch.device(
+        'cuda' if torch.cuda.is_available() and use_cuda_if_available else 'cpu')
 
     if args.model == 'fastpitch':
         from models.fastpitch import FastPitch2Wave
-        model = FastPitch2Wave(args.checkpoint)
+        model = FastPitch2Wave(args.checkpoint, 
+                               vocoder_sd=args.vocoder_sd,
+                               vocoder_config=args.vocoder_config)
     elif args.model == 'tacotron2':
         from models.tacotron2 import Tacotron2Wave
-        model = Tacotron2Wave(args.checkpoint)
+        model = Tacotron2Wave(args.checkpoint, 
+                              vocoder_sd=args.vocoder_sd,
+                              vocoder_config=args.vocoder_config)
     else:
         raise "model type not supported"
 
@@ -83,12 +90,13 @@ def main():
         '--model', type=str, default='fastpitch')
     parser.add_argument(
         '--checkpoint', type=str, default='pretrained/fastpitch_ar_adv.pth')
+    parser.add_argument('--vocoder_sd', type=str, default=None)
+    parser.add_argument('--vocoder_config', type=str, default=None) 
     parser.add_argument('--out_dir', type=str, default='samples/results')
     parser.add_argument('--speed', type=float, default=1.0)
     parser.add_argument('--denoise', type=float, default=0)
     parser.add_argument('--batch_size', type=int, default=2)
-    parser.add_argument('--device', type=str,
-                        default='cuda', choices=['cuda', 'cpu'])
+    parser.add_argument('--cpu', action='store_true')
     args = parser.parse_args()
 
     infer(args)

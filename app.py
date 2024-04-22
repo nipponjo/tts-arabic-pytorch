@@ -10,7 +10,8 @@ from utils.app_utils import TTSManager
 
 app = FastAPI()
 
-tts_manager = TTSManager('app/static')
+use_cuda_if_available = True
+tts_manager = TTSManager('app/static', use_cuda_if_available=use_cuda_if_available)
 
 class TTSRequest(BaseModel):
     buckw: str

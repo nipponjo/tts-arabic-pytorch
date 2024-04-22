@@ -68,4 +68,3 @@ for file_dict in FILES_DICT.values():
     elif file_dict.get('download', True):
         print("Downloading ", file_dict['path'], "...")
         output_filepath = gdown.download(file_dict['url'], output=file_path.as_posix(), fuzzy=True)
-
