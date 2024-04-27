@@ -347,23 +347,37 @@ class Tacotron2Wave(nn.Module):
     def tts(self,
             text_buckw: Union[str, List[str]],
             speed: Union[int, float, None] = None,
-            denoise: float = 0,
+            denoise: float = 0.005,
             speaker_id: int = 0,
             batch_size: int = 8,
             vowelizer: Optional[_VOWELIZER_TYPE] = None,
             postprocess_mel: bool = True,
             return_mel: bool = False
-            ):
+            ) -> Union[torch.Tensor, List[torch.Tensor]]:
         """
-        Args:
+        Parameters:
             text_buckw (str|List[str]): Input text.
             speed (float): Speaking speed.
             denoise (float): Hifi-GAN Denoiser strength.
             speaker_id (int): Speaker Id.
-            batch_size (int): bacch size for inferrence.
+            batch_size (int): Batch size for inference.
             vowelizer (None|str): options [None, `'shakkala'`, `'shakkelha'`].
             postprocess_mel (bool): Whether to postprocess.
             return_mel (bool): Whether to return the mel spectrogram(s).
+            
+        Returns:
+            (Tensor|List[Tensor]): Audio waveform(s), shape: [n_samples]
+            
+        Examples:
+            >>> from models.tacotron2 import Tacotron2Wave
+            >>> model = Tacotron2Wave('pretrained/tacotron2_ar_adv.pth')
+            # Arabic input
+            >>> wave = model.tts("اَلسَّلامُ عَلَيكُم يَا صَدِيقِي")
+            # Buckwalter transliteration
+            >>> wave = model.tts(">als~alAmu Ealaykum yA Sadiyqiy")
+            # List input
+            >>> wave_list = model.tts(["صِفر" ,"واحِد" ,"إِثنان", "ثَلاثَة" ,"أَربَعَة" ,"خَمسَة", "سِتَّة" ,"سَبعَة" ,"ثَمانِيَة", "تِسعَة" ,"عَشَرَة"])
+
         """
 
         # input: string

@@ -282,20 +282,35 @@ class FastPitch2Wave(nn.Module):
     def tts(self,
             text_input: Union[str, List[str]],
             speed: float = 1.,
-            denoise: float = 0, 
+            denoise: float = 0.005, 
             speaker_id: int = 0,
             batch_size: int = 2,
             vowelizer: Optional[_VOWELIZER_TYPE] = None,          
-            return_mel: bool = False):
+            return_mel: bool = False
+            ) -> Union[torch.Tensor, List[torch.Tensor]]:
         """
-        Args:
+        Parameters:
             text_input (str|List[str]): Input text.
             speed (float): Speaking speed.
             denoise (float): Hifi-GAN Denoiser strength.
             speaker_id (int): Speaker Id.
-            batch_size (int): bacch size for inferrence.
+            batch_size (int): Batch size for inference.
             vowelizer (None|str): options [None, `'shakkala'`, `'shakkelha'`].
             return_mel (bool): Whether to return the mel spectrogram(s).
+        
+        Returns:
+            (Tensor|List[Tensor]): Audio waveform(s), shape: [n_samples]
+            
+        Examples:
+            >>> from models.fastpitch import FastPitch2Wave
+            >>> model = FastPitch2Wave('pretrained/fastpitch_ar_adv.pth')
+            # Arabic input
+            >>> wave = model.tts("اَلسَّلامُ عَلَيكُم يَا صَدِيقِي")
+            # Buckwalter transliteration
+            >>> wave = model.tts(">als~alAmu Ealaykum yA Sadiyqiy")
+            # List input
+            >>> wave_list = model.tts(["صِفر" ,"واحِد" ,"إِثنان", "ثَلاثَة" ,"أَربَعَة" ,"خَمسَة", "سِتَّة" ,"سَبعَة" ,"ثَمانِيَة", "تِسعَة" ,"عَشَرَة"])
+
         """
 
         # input: string
