@@ -1,6 +1,5 @@
 # %%
 import pathlib
-from utils.urls import FILES_DICT
 import gdown
 
 # %%
