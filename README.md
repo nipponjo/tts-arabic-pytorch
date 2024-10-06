@@ -1,4 +1,8 @@
 # tts-arabic-pytorch
+[[Samples 1]](https://nipponjo.github.io/tts-arabic-samples) 
+[[Samples 2]](https://nipponjo.github.io/tts-arabic-speakers) 
+[[ONNX models]](https://github.com/nipponjo/tts_arabic) 
+[[Flutter app]](https://github.com/nipponjo/tts-arabic-flutter) 
 
 TTS models (Tacotron2, FastPitch), trained on [Nawar Halabi](https://github.com/nawarhalabi)'s [Arabic Speech Corpus](http://en.arabicspeechcorpus.com/), including the [HiFi-GAN vocoder](https://github.com/jik876/hifi-gan) for direct TTS inference.
 
