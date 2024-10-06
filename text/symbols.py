@@ -17,6 +17,7 @@ special_symbols = [
 
 punctuation = [
     # punctuation
+    ' ',
     '.', ',', '?', '!', 
     '-', # hyphen-minus U+002D    
 ]

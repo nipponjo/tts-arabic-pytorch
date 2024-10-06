@@ -10,22 +10,25 @@ from models.fastpitch.fastpitch.model import FastPitch
 from models.fastpitch.fastpitch.data_function import (TTSCollate, batch_to_gpu)
 from models.fastpitch.fastpitch.loss_function import FastPitchLoss
 from models.fastpitch.fastpitch.attn_loss_function import AttentionBinarizationLoss
-from models.common.loss import (PatchDiscriminator, 
+from models.common.loss import (PatchDiscriminatorCond, 
                                 calc_feature_match_loss, 
                                 extract_chunks)
 from utils.data import DynBatchDataset
 from utils import get_config
 from utils.training import save_states_gan as save_states
+
+torch.cuda.set_device('cuda:1')
+
 # %%
 
 try:
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str,
-                        default="configs/nawar_fp_adv.yaml", help="Path to yaml config file")
+                        default="configs/nawar_fp_adv_raw.yaml", help="Path to yaml config file")
     args = parser.parse_args()
     config_path = args.config
 except:
-    config_path = './configs/nawar_fp_adv.yaml'
+    config_path = './configs/nawar_fp_adv_raw.yaml'
 
 # %%
 
@@ -42,11 +45,13 @@ train_dataset = DynBatchDataset(
     txtpath=config.train_labels,
     wavpath=config.train_wavs_path,
     label_pattern=config.label_pattern,
-    f0_dict_path=config.f0_dict_path,
+    f0_folder_path=config.f0_folder_path,
     f0_mean=config.f0_mean, f0_std=config.f0_std,
     max_lengths=config.max_lengths,
     batch_sizes=config.batch_sizes,
     )
+
+train_dataset.f0_folder_path
 
 # %%
 
@@ -60,7 +65,14 @@ train_loader = DataLoader(train_dataset,
                           shuffle=shuffle, drop_last=drop_last,
                           sampler=sampler)
 
+# %%
+(text_padded, input_lengths, mel_padded, output_lengths, len_x,
+    pitch_padded, energy_padded, speaker, attn_prior_padded,
+    audiopaths) = next(iter(train_loader))
+
 # %% Generator
+
+net_config['n_speakers'] = 1600
 
 model = FastPitch(**net_config).to(device)
 
@@ -69,12 +81,14 @@ optimizer = torch.optim.AdamW(model.parameters(),
                               betas=(config.g_beta1, config.g_beta2), 
                               weight_decay=config.weight_decay)
 
-criterion = FastPitchLoss()
+criterion = FastPitchLoss(
+    dur_loss_toofast_scale=1.
+)
 attention_kl_loss = AttentionBinarizationLoss()
 
 # %% Discriminator
 
-critic = PatchDiscriminator(1, 32).to(device)
+critic = PatchDiscriminatorCond(2, 32).to(device)
 
 optimizer_d = torch.optim.AdamW(critic.parameters(),
                                 lr=config.d_lr, 
@@ -85,6 +99,8 @@ chunk_len = 128
 # %%
 # resume from existing checkpoint
 n_epoch, n_iter = 0, 0
+
+# config.restore_model = './checkpoints/exp_fp_adv/states.pth'
 
 if config.restore_model != '':
     state_dicts = torch.load(config.restore_model)
@@ -121,7 +137,10 @@ for epoch in range(n_epoch, config.epochs):
         y_pred = model(x)
 
         mel_out, *_, attn_soft, attn_hard, _, _ = y_pred
-        _, _, mel_padded, output_lengths, *_ = x
+        
+        (text_padded, input_lengths, mel_padded, output_lengths,
+         pitch_padded, energy_padded, speaker, 
+         attn_prior, audiopaths) = x
 
         # extract chunks for critic
         Nchunks = mel_out.size(0)
@@ -138,10 +157,16 @@ for epoch in range(n_epoch, config.epochs):
 
         chunks_org_ = (chunks_org.unsqueeze(1) + 4.5) / 2.5
         chunks_gen_ = (chunks_gen.unsqueeze(1) + 4.5) / 2.5
+        
+        with torch.no_grad():
+            speakers_input = speaker[mel_ids]
+            speaker_vecs = model.speaker_emb.weight[speakers_input]
+            speaker_vecs = torch.nn.functional.normalize(speaker_vecs, p=2, dim=1)         
+            cond_vecs = speaker_vecs
 
         # discriminator step
-        d_org, fmaps_org = critic(chunks_org_.requires_grad_(True))
-        d_gen, _ = critic(chunks_gen_.detach())  
+        d_org, fmaps_org = critic(chunks_org_.requires_grad_(True), cond_vecs)
+        d_gen, _ = critic(chunks_gen_.detach(), cond_vecs)  
 
         loss_d = 0.5*(d_org - 1).square().mean() + 0.5*d_gen.square().mean()    
 
@@ -152,7 +177,7 @@ for epoch in range(n_epoch, config.epochs):
         # generator step
         loss, meta = criterion(y_pred, y)  
         
-        d_gen2, fmaps_gen = critic(chunks_gen_)
+        d_gen2, fmaps_gen = critic(chunks_gen_, cond_vecs)
         loss_score = (d_gen2 - 1).square().mean()
         loss_fmatch = calc_feature_match_loss(fmaps_gen, fmaps_org)
 
@@ -217,3 +242,77 @@ save_states(f'states.pth', model, critic,
 #         pitch_padded, energy_padded, speaker, attn_prior, audiopaths]
 
 # y = [mel_padded, input_lengths, output_lengths]
+
+# %%
+
+import matplotlib.pyplot as plt
+
+# %%
+
+idx = 0
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 7))
+ax1.imshow(y_pred[0][idx,:y[2][idx],:].detach().cpu().t(), aspect='auto', origin='lower')
+ax2.imshow(y[0][idx,:,:y[2][idx]].detach().cpu(), aspect='auto', origin='lower')
+
+
+# %%
+
+import sounddevice as sd
+from vocoder import load_hifigan
+from vocoder.hifigan.denoiser import Denoiser
+
+model.eval()
+vocoder = load_hifigan(config.vocoder_state_path, config.vocoder_config_path)
+vocoder = vocoder.cuda()
+denoiser = Denoiser(vocoder)
+
+# %%
+
+model.eval()
+with torch.inference_mode():
+    (mel_out, dec_lens, dur_pred, 
+    pitch_pred, energy_pred) = model.infer(x[0][0:1])
+
+    wave = vocoder(mel_out[0])
+
+mel_out.shape
+plt.imshow(mel_out[0].cpu(), aspect='auto', origin='lower')
+
+plt.plot(wave[0].cpu())
+
+sd.play(wave[0].cpu(), 22050)
+
+
+# %%
+
+
+from text import tokenizer_raw
+
+# def remove_diacrits(text: str): 
+#     return ''.join([c for c in text if c not in diacrit_arab])
+
+# [symbols[idx] for idx in x[0][0]]
+
+
+# text = 'اَلسَّلامُ عَلَيكُم يَا صَدِيقِي.'
+phrase = 'أَتَاحَتْ لِلبَائِعِ المُتَجَوِّلِ أنْ يَكُونَ جَاذِباً لِلمُوَاطِنِ الأقَلِّ دَخْلاً'
+# phrase = remove_diacrits(phrase)
+
+token_ids = x[0][idx:idx+1]
+token_ids = torch.LongTensor(
+    tokenizer_raw(' ' + phrase + '. '))[None].cuda()
+
+
+with torch.inference_mode():
+    (mel_out, dec_lens, dur_pred, 
+    pitch_pred, energy_pred) = model.infer(token_ids, 
+                                           pace=1, speaker=1)
+
+    wave = vocoder(mel_out[0])
+    wave_ = denoiser(wave, 0.003)
+    wave_ /= wave_.abs().max()
+    
+
+sd.play(0.5*wave_[0].cpu(), 22050)
+
+# %%

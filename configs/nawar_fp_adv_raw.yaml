@@ -1,0 +1,43 @@
+
+# restore_model: ''
+restore_model: ./pretrained/fastpitch_raw_ms.pth
+# restore_model: ./checkpoints/exp_fp_adv/states.pth
+
+log_dir: logs/exp_fp_adv  # for tensorboard
+checkpoint_dir: checkpoints/exp_fp_adv
+
+# dataset
+train_wavs_path: I:/tts/3arabiyya/arabic-speech-corpus/wav_red
+train_labels: ./data/train_arab.txt
+
+# test_wavs_path: I:/tts/3arabiyya/arabic-speech-corpus/test set/wav_new
+# test_labels: ./data/test_phon.txt
+
+label_pattern: '"(?P<filename>.*)" "(?P<raw>.*)"'
+# label_pattern: '(?P<filename>.*)\|(?P<raw>.*)'
+
+# for fastpitch
+f0_folder_path: I:/tts/3arabiyya/arabic-speech-corpus/wav_red/pitches_penn
+
+f0_mean: 130.05478
+f0_std: 22.86267
+
+# loss weights
+gan_loss_weight: 3.
+feat_loss_weight: 1.
+
+# batch sizes
+max_lengths: [20, 30, 40, 50, 80, 100, 160, 210, 300, 5000]
+batch_sizes: [32, 32, 32, 32, 16, 16, 10, 8, 6, 4]
+
+# optimizers
+g_lr: 1.0e-4    # lr for AdamW optimizer (generator)
+g_beta1: 0.     # beta1 for AdamW optimizer (generator)
+g_beta2: 0.99   # beta2 for AdamW optimizer (generator)
+
+d_lr: 1.0e-4    # lr for AdamW optimizer (discriminator)
+d_beta1: 0.     # beta1 for AdamW optimizer (discriminator)
+d_beta2: 0.99   # beta2 for AdamW optimizer (discriminator)
+
+n_save_states_iter: 100
+n_save_backup_iter: 1000

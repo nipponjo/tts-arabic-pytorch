@@ -1,4 +1,4 @@
-from text.symbols import symbols, DOUBLING_TOKEN, EOS_TOKEN, SEPARATOR_TOKEN
+from text.symbols import symbols, symbols_full, DOUBLING_TOKEN, EOS_TOKEN, SEPARATOR_TOKEN
 from text.phonetise_buckwalter import (
     arabic_to_buckwalter,
     buckwalter_to_arabic,
@@ -19,12 +19,19 @@ vowel_map = {
 }
 
 phon_to_id_ = {phon: i for i, phon in enumerate(symbols)}
+letter_to_id_ = {phon: i for i, phon in enumerate(symbols_full)}
 
 
 def tokens_to_ids(phonemes, phon_to_id=None):
     if phon_to_id is None:
-        return [phon_to_id_[phon] for phon in phonemes]
-    return [phon_to_id[phon] for phon in phonemes]
+        phon_to_id = phon_to_id_
+    
+        token_ids = []
+        for letter in phonemes:
+            if letter in phon_to_id:
+                token_ids.append(phon_to_id[letter])
+                
+    return token_ids
 
 
 def ids_to_tokens(ids):
@@ -76,3 +83,30 @@ def simplify_phonemes(phonemes):
     for k, v in vowel_map.items():
         phonemes = phonemes.replace(k, v)
     return phonemes
+
+
+def tokenizer_phonetic(phrase, input_type='arabic', phon_to_id=None):
+    
+    if input_type == 'arabic':
+        phonemes = arabic_to_phonemes(phrase)
+    elif input_type == 'phonemes':
+        phonemes = phrase
+    elif input_type == 'buckwalter':
+        phonemes = buckwalter_to_phonemes(phrase)
+    
+    tokens = phonemes_to_tokens(phonemes)
+    
+    token_ids = tokens_to_ids(tokens, phon_to_id=phon_to_id)
+    
+    return token_ids
+
+def tokenizer_raw(phrase, letter_to_id=None):
+    if letter_to_id is None:
+        letter_to_id = letter_to_id_
+    
+    token_ids = []
+    for letter in phrase:
+        if letter in letter_to_id:
+            token_ids.append(letter_to_id[letter])
+    
+    return token_ids

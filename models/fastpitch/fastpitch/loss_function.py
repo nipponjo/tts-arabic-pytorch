@@ -43,13 +43,28 @@ def mask_from_lens(lens, max_len: Optional[int] = None):
 
 
 class FastPitchLoss(nn.Module):
-    def __init__(self, mel_loss_scale=1.0,
+    def __init__(self, 
+                 mel_loss_scale=1.0,
+                #  mel_lin_loss_scale=1.0,
+                 mel_loss_over_scale=1.0,
+                 mel_loss_under_scale=1.0,
                  dur_predictor_loss_scale=1.0,
+                 dur_loss_toofast_scale=1.0,
+                 dur_loss_tooslow_scale=1.0,
                  pitch_predictor_loss_scale=1.0, attn_loss_scale=1.0,
                  energy_predictor_loss_scale=0.1):
         super(FastPitchLoss, self).__init__()
+
         self.mel_loss_scale = mel_loss_scale
+
+        self.mel_loss_over_scale = mel_loss_over_scale
+        self.mel_loss_under_scale = mel_loss_under_scale
+        # self.mel_lin_loss_scale = mel_lin_loss_scale
+
         self.dur_predictor_loss_scale = dur_predictor_loss_scale
+        self.dur_loss_toofast_scale = dur_loss_toofast_scale
+        self.dur_loss_tooslow_scale = dur_loss_tooslow_scale
+
         self.pitch_predictor_loss_scale = pitch_predictor_loss_scale
         self.energy_predictor_loss_scale = energy_predictor_loss_scale
         self.attn_loss_scale = attn_loss_scale
@@ -73,14 +88,46 @@ class FastPitchLoss(nn.Module):
         log_dur_tgt = torch.log(dur_tgt.float() + 1)
         loss_fn = F.mse_loss
         dur_pred_loss = loss_fn(log_dur_pred, log_dur_tgt, reduction='none')
-        dur_pred_loss = (dur_pred_loss * dur_mask).sum() / dur_mask.sum()
+        w_dur_loss = (dur_pred > dur_tgt)*self.dur_loss_tooslow_scale \
+                   + (dur_pred < dur_tgt)*self.dur_loss_toofast_scale
+        dur_pred_loss = (0.5*w_dur_loss * dur_pred_loss * dur_mask).sum() / dur_mask.sum()
 
         ldiff = mel_tgt.size(1) - mel_out.size(1)
         mel_out = F.pad(mel_out, (0, 0, 0, ldiff, 0, 0), value=0.0)
         mel_mask = mel_tgt.ne(0).float()
-        loss_fn = F.mse_loss
-        mel_loss = loss_fn(mel_out, mel_tgt, reduction='none')
-        mel_loss = (mel_loss * mel_mask).sum() / mel_mask.sum()
+
+        # loss_fn = F.mse_loss
+        # mel_loss = loss_fn(mel_out, mel_tgt, reduction='none')
+        # mel_loss = (mel_loss * mel_mask).sum() / mel_mask.sum()
+
+        error = mel_out - mel_tgt
+        error_out_over = error*(error>0) # pred over target
+        error_out_under = error*(error<0)
+
+        # mel_loss = (self.mel_loss_over_scale*error_out_over.square() 
+        #                 + self.mel_loss_under_scale*error_out_under.square()) 
+        mel_loss_over = self.mel_loss_over_scale*(error_out_over.square())
+        mel_loss_under = self.mel_loss_under_scale*(error_out_under.square())
+               
+        # mel_lin_loss = loss_fn(mel_out.exp(), mel_tgt.exp(), reduction='none')
+        mask_sum = mel_mask.sum()
+        mel_loss_over = (mel_loss_over * mel_mask).sum() / mask_sum
+        mel_loss_under  = (mel_loss_under * mel_mask).sum() / mask_sum
+        # mel_loss = 2*mel_loss / (self.mel_loss_over_scale + self.mel_loss_under_scale)
+        mel_loss = 2*(mel_loss_over + mel_loss_under) / (self.mel_loss_over_scale + self.mel_loss_under_scale)
+
+
+        # loss_fn = F.l1_loss
+
+        # error_lin = mel_out.exp() - mel_tgt.exp()
+        # error_out_over = error_lin*(error_lin>0)
+        # error_out_under = error_lin*(error_lin<0)
+
+        # mel_lin_loss = (self.mel_loss_over_scale*error_out_over.abs() 
+        #                 + self.mel_loss_under_scale*error_out_under.abs())        
+        # mel_lin_loss = loss_fn(mel_out.exp(), mel_tgt.exp(), reduction='none')
+        # mel_lin_loss = (mel_lin_loss * mel_mask).sum() / mel_mask.sum()
+        # mel_lin_loss = 2*mel_lin_loss / (self.mel_loss_over_scale + self.mel_loss_under_scale)
 
         ldiff = pitch_tgt.size(2) - pitch_pred.size(2)
         pitch_pred = F.pad(pitch_pred, (0, ldiff, 0, 0, 0, 0), value=0.0)
@@ -98,6 +145,7 @@ class FastPitchLoss(nn.Module):
         attn_loss = self.attn_ctc_loss(attn_logprob, in_lens, out_lens)
 
         loss = (mel_loss * self.mel_loss_scale
+                # + mel_lin_loss * self.mel_lin_loss_scale
                 + dur_pred_loss * self.dur_predictor_loss_scale
                 + pitch_loss * self.pitch_predictor_loss_scale
                 + energy_loss * self.energy_predictor_loss_scale
@@ -106,11 +154,14 @@ class FastPitchLoss(nn.Module):
         meta = {
             'loss': loss.clone().detach(),
             'mel_loss': mel_loss.clone().detach(),
+            'mel_loss_over': mel_loss_over.clone().detach(),
+            'mel_loss_under': mel_loss_under.clone().detach(),
+            # 'mel_lin_loss': mel_lin_loss.clone().detach(),
             'duration_predictor_loss': dur_pred_loss.clone().detach(),
             'pitch_loss': pitch_loss.clone().detach(),
             'attn_loss': attn_loss.clone().detach(),
             'dur_error': (torch.abs(dur_pred - dur_tgt).sum()
-                          / dur_mask.sum()).detach(),
+                          / dur_mask.sum()).detach(),          
         }
 
         if energy_pred is not None:

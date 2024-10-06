@@ -1,3 +1,5 @@
+import os
+import pickle
 import sys
 import yaml
 try:
@@ -72,3 +74,31 @@ def progbar(iterable, length=30, symbol='='):
             sys.stdout.write('\n')
         sys.stdout.flush()
         yield item
+
+
+
+AUDIO_EXTENSIONS = ('.wav', '.mp3',)
+
+def is_audio_file(fname, extensions = AUDIO_EXTENSIONS):
+    return fname.lower().endswith(extensions)
+
+def make_dataset_from_subdirs(folder_path, extensions = AUDIO_EXTENSIONS):
+    samples = []
+    for root, _, fnames in os.walk(folder_path, followlinks=True):
+        for fname in fnames:
+            if is_audio_file(fname, extensions):
+                samples.append(os.path.join(root, fname))
+
+    return samples
+
+def scandir(folder_path, extensions = AUDIO_EXTENSIONS):
+    return make_dataset_from_subdirs(folder_path, extensions)    
+
+def save_pickle(onj, filepath):
+    with open(filepath, 'wb') as f:
+        pickle.dump(onj, f)
+        
+def load_pickle(filepath):
+    with open(filepath, 'rb') as f:
+        obj = pickle.load(f)
+    return obj    

@@ -41,6 +41,35 @@ def calc_feature_match_loss(fmaps_gen: List[Tensor],
     return loss_fmatch
 
 
+class LinearSN(nn.Linear):
+    """Linear layer that applies Spectral Normalization before every call."""
+
+    def __init__(self, cnum_in,
+                 cnum_out, n_iter=1, eps=1e-12, bias=True):
+        super().__init__(cnum_in, cnum_out, bias=bias)
+        self.register_buffer("weight_u", torch.empty(self.weight.size(0), 1))
+        nn.init.trunc_normal_(self.weight_u)
+        self.n_iter = n_iter
+        self.eps = eps
+
+    def l2_norm(self, x):
+        return torch.nn.functional.normalize(x, p=2, dim=0, eps=self.eps)
+
+    def forward(self, x):
+        weight_orig = self.weight.detach()
+
+        for _ in range(self.n_iter):
+            v = self.l2_norm(weight_orig.t() @ self.weight_u)
+            self.weight_u = self.l2_norm(weight_orig @ v)
+
+        sigma = self.weight_u.t() @ weight_orig @ v
+        self.weight.data.div_(sigma)
+
+        x = super().forward(x)
+
+        return x
+
+
 class Conv2DSpectralNorm(nn.Conv2d):
     """Convolution layer that applies Spectral Normalization before every call."""
 
@@ -102,6 +131,45 @@ class PatchDiscriminator(nn.Module):
 
     def forward(self, x):
         x1 = self.conv1(x)
+        x2 = self.conv2(x1)
+        x3 = self.conv3(x2)
+        x4 = self.conv4(x3)
+        x5 = self.conv5(x4)
+        x = nn.Flatten()(x5)
+
+        return x, [x1, x2, x3, x4]
+    
+
+class PatchDiscriminatorCond(nn.Module):
+    def __init__(self, 
+                 cnum_in, 
+                 cnum, 
+                 d_mel=80, 
+                 d_emb=384):
+        super().__init__()
+        self.conv1 = DConv(cnum_in, cnum)
+        self.conv2 = DConv(cnum, 2*cnum)
+        self.conv3 = DConv(2*cnum, 4*cnum)
+        self.conv4 = DConv(4*cnum, 4*cnum)
+        self.conv5 = DConv(4*cnum, 4*cnum)
+        
+        self.lin1 = LinearSN(d_emb, 256)
+        self.lin2 = LinearSN(256, d_mel)
+        self.act = nn.LeakyReLU(0.2)
+
+
+    def forward(self, x, s):
+        """
+            x: [B, 1, d_mel, T]
+            s: [B, d_emb]
+        """
+        xl1 = self.act(self.lin1(s))
+        xl2 = self.act(self.lin2(xl1))
+
+        x_rep = xl2.unsqueeze(2).repeat(1,1,x.size(-1)).unsqueeze(1)
+        x_cat = torch.cat((x, x_rep), dim=1)
+
+        x1 = self.conv1(x_cat)
         x2 = self.conv2(x1)
         x3 = self.conv3(x2)
         x4 = self.conv4(x3)

@@ -9,6 +9,7 @@ from torch.utils.data import Dataset
 
 from utils import read_lines_from_file, progbar
 from utils.audio import MelSpectrogram
+from text.symbols import symbols_nawar, symbols_full
 
 def text_mel_collate_fn(batch, pad_value=0):
     """
@@ -81,20 +82,29 @@ def _process_line(label_pattern: str, line: str):
         raise Exception(f'no match for line: {line}')
 
     res_dict = match.groupdict()
+    
+    if 'raw' in res_dict:
+        token_ids = text.tokenizer_raw(res_dict['raw'])
 
-    if 'arabic' in res_dict:
-        phonemes = text.arabic_to_phonemes(res_dict['arabic'])
+    elif 'arabic' in res_dict:
+        # phonemes = text.arabic_to_phonemes(res_dict['arabic'])
+        token_ids = text.tokenizer_phonetic(res_dict['arabic'])
     elif 'phonemes' in res_dict:
-        phonemes = res_dict['phonemes']
+        # phonemes = res_dict['phonemes']
+        token_ids = text.tokenizer_phonetic(res_dict['phonemes'])
     elif 'buckwalter' in res_dict:
-        phonemes = text.buckwalter_to_phonemes(res_dict['buckwalter'])
+        # phonemes = text.buckwalter_to_phonemes(res_dict['buckwalter'])
+        token_ids = text.tokenizer_phonetic(res_dict['buckwalter'])
+    
     
     if 'filename' in res_dict:
         filename = res_dict['filename']
     elif 'filestem' in res_dict:
         filename = f"{res_dict['filestem']}.wav"        
 
-    return phonemes, filename
+    return token_ids, filename
+
+
 
 
 class ArabDataset(Dataset):
@@ -121,7 +131,7 @@ class ArabDataset(Dataset):
 
         for l_idx, line in enumerate(progbar(lines)):
             try:
-                phonemes, filename = _process_line(
+                token_ids, filename = _process_line(
                     self.label_pattern, line)
             except:
                 print(f'invalid line {l_idx}: {line}')
@@ -132,12 +142,12 @@ class ArabDataset(Dataset):
                 print(f"{fpath} does not exist")
                 continue
 
-            try:
-                tokens = text.phonemes_to_tokens(phonemes)
-                token_ids = text.tokens_to_ids(tokens)
-            except:
-                print(f'invalid phonemes at line {l_idx}: {line}')
-                continue
+            # try:
+            #     tokens = text.phonemes_to_tokens(phonemes)
+            #     token_ids = text.tokens_to_ids(tokens)
+            # except:
+            #     print(f'invalid phonemes at line {l_idx}: {line}')
+            #     continue
            
             phoneme_mel_list.append((torch.LongTensor(token_ids), fpath))
 
@@ -172,7 +182,7 @@ class ArabDataset4FastPitch(Dataset):
                  txtpath: str = './data/train_phon.txt',
                  wavpath: str = 'G:/data/arabic-speech-corpus/wav_new',                
                  label_pattern: str = '"(?P<filename>.*)" "(?P<phonemes>.*)"',
-                 f0_dict_path: str = './data/pitch_dict.pt',
+                 f0_folder_path: str = '',
                  f0_mean: float = 130.05478, 
                  f0_std: float = 22.86267,
                  sr_target: int = 22050
@@ -185,12 +195,15 @@ class ArabDataset4FastPitch(Dataset):
         self.label_pattern = label_pattern
         self.sr_target = sr_target
 
-        self.f0_dict = torch.load(f0_dict_path)
+        # self.f0_dict = torch.load(f0_dict_path)
+        self.f0_folder_path = f0_folder_path
         self.f0_mean = f0_mean
         self.f0_std = f0_std
         self.betabinomial_interpolator = BetaBinomialInterpolator()
 
         self.data = self._process_textfile(txtpath)
+        
+        
 
 
     def _process_textfile(self, txtpath: str):
@@ -199,42 +212,52 @@ class ArabDataset4FastPitch(Dataset):
         phoneme_mel_pitch_list = []
 
         for l_idx, line in enumerate(progbar(lines)):
+            
 
             try:
-                phonemes, filename = _process_line(
+                token_ids, filename = _process_line(
                     self.label_pattern, line)
             except:
                 print(f'invalid line {l_idx}: {line}')
                 continue
 
+            # try:
+            #     tokens = text.phonemes_to_tokens(phonemes)
+            #     token_ids = text.tokens_to_ids(tokens)
+            # except:
+            #     print(f'invalid phonemes at line {l_idx}: {line}')
+            #     continue
+            
             fpath = os.path.join(self.wav_path, filename)            
             if not os.path.exists(fpath):
                 print(f"{fpath} does not exist")
                 continue
 
-            try:
-                tokens = text.phonemes_to_tokens(phonemes)
-                token_ids = text.tokens_to_ids(tokens)
-            except:
-                print(f'invalid phonemes at line {l_idx}: {line}')
-                continue
                     
-            wav_name = os.path.basename(fpath)
-            pitch_mel = self.f0_dict[wav_name][None]
+            # wav_name = os.path.basename(fpath)
+            # pitch_mel = self.f0_dict[wav_name][None]
          
             phoneme_mel_pitch_list.append(
-                (torch.LongTensor(token_ids), fpath, pitch_mel))
+                (torch.LongTensor(token_ids), fpath))
         
         return phoneme_mel_pitch_list
+    
+    def _load_pitch(self, fname):
+        pitch_filepath = os.path.join(self.f0_folder_path, 
+                        fname + '.pth')
+      
+        return torch.load(pitch_filepath)
+
 
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, idx):
 
-        phonemes, fpath, pitch_mel = self.data[idx]
+        phonemes, filepath = self.data[idx]
+        filename = os.path.basename(filepath)
 
-        wave, sr = torchaudio.load(fpath)
+        wave, sr = torchaudio.load(filepath)
         if sr != self.sr_target:
             wave = torchaudio.functional.resample(wave, sr, self.sr_target, 64)
 
@@ -243,16 +266,23 @@ class ArabDataset4FastPitch(Dataset):
 
         keep = remove_silence(mel_log.mean(0))
         mel_log = mel_log[:, keep]
+
+
+        pitch_mel = self._load_pitch(filename)
+
         pitch_mel = normalize_pitch(pitch_mel[:,keep], self.f0_mean, self.f0_std)
+
+
+
 
         energy = torch.norm(mel_log.float(), dim=0, p=2)
         attn_prior = torch.from_numpy(
             self.betabinomial_interpolator(mel_log.size(1), len(phonemes)))
 
-        speaker = None
+        speaker = 0
         return (phonemes, mel_log, len(phonemes), pitch_mel, 
                 energy, speaker, attn_prior,
-                fpath)
+                filepath)
 
 
 class DynBatchDataset(ArabDataset4FastPitch):
@@ -260,16 +290,18 @@ class DynBatchDataset(ArabDataset4FastPitch):
                  txtpath: str = './data/train_phon.txt',
                  wavpath: str = 'G:/data/arabic-speech-corpus/wav_new',
                  label_pattern: str = '"(?P<filename>.*)" "(?P<phonemes>.*)"',
-                 f0_dict_path: str = './data/pitch_dict.pt',
+                 f0_folder_path: str = '',
                  f0_mean: float = 130.05478, 
                  f0_std: float = 22.86267,
-                 max_lengths: list[int] = [1000, 1300, 1850, 30000],
-                 batch_sizes: list[int] = [10, 8, 6, 4],
+                 max_lengths: list[int] = [20, 30, 40, 50, 80,
+                            100, 160, 210, 300, 5000],
+                 batch_sizes: list[int] = [32, 32, 32, 32, 16,
+                            16, 10, 8, 6, 4],
                  ):
         
         super().__init__(txtpath=txtpath, wavpath=wavpath,
                          label_pattern=label_pattern,
-                         f0_dict_path=f0_dict_path,
+                         f0_folder_path=f0_folder_path,
                          f0_mean=f0_mean, f0_std=f0_std)
 
         self.max_lens = [0,] + max_lengths
@@ -280,7 +312,8 @@ class DynBatchDataset(ArabDataset4FastPitch):
 
     def shuffle(self):
       
-        lens = [x[2].size(1) for x in self.data] # x[2]: pitch
+        # lens = [x[2].size(1) for x in self.data] # x[2]: pitch
+        lens = [len(x[0]) for x in self.data] # x[0]: tokens
 
         ids_per_bs = {b: [] for b in self.b_sizes}
 

@@ -86,18 +86,39 @@ class FastPitch(_FastPitch):
             utterance = self.vowelizers[vowelizer].predict(utterance_ar)
         return utterance
 
-    def _tokenize(self, utterance: str, vowelizer: Optional[_VOWELIZER_TYPE] = None):
+    # def _tokenize(self, utterance: str, vowelizer: Optional[_VOWELIZER_TYPE] = None):
+    #     utterance = self._vowelize(utterance=utterance, vowelizer=vowelizer)
+        
+    #     if self.arabic_in:
+    #         return text.arabic_to_tokens(utterance, append_space=False)
+        
+    #     tokens = text.buckwalter_to_tokens(utterance, append_space=False)
+        
+    #     return tokens
+    
+    def _tokenize(self, 
+                  utterance: str, 
+                  vowelizer: Optional[_VOWELIZER_TYPE] = None,
+                  phonemize: bool = True,
+                  ) -> list[int]:
         utterance = self._vowelize(utterance=utterance, vowelizer=vowelizer)
-        if self.arabic_in:
-            return text.arabic_to_tokens(utterance, append_space=False)
-        return text.buckwalter_to_tokens(utterance, append_space=False)
+        
+        if phonemize:
+            if self.arabic_in:
+                return text.tokenizer_phonetic(utterance, input_type='arabic', phon_to_id=self.phon_to_id)       
+            return text.tokenizer_phonetic(utterance, input_type='buckwalter', phon_to_id=self.phon_to_id)  
+        
+        return text.tokenizer_raw(utterance, letter_to_id=self.phon_to_id)
+        
+        return tokens
 
     @torch.inference_mode()
     def ttmel_single(self,
                      utterance: str,
                      speed: float = 1,
-                     speaker_id: int = 0,
+                     speaker_id: int = 0,                     
                      vowelizer: Optional[_VOWELIZER_TYPE] = None,
+                     phonemize: bool = True,
                      pitch_mul: float = 1.,
                      pitch_add: float = 0.,
                      dur_tgt = None, 
@@ -111,9 +132,12 @@ class FastPitch(_FastPitch):
                                          mean, std)
         """
 
-        tokens = self._tokenize(utterance, vowelizer=vowelizer)
-
-        token_ids = text.tokens_to_ids(tokens, self.phon_to_id)
+        # tokens = self._tokenize(utterance, vowelizer=vowelizer)
+        # token_ids = text.tokens_to_ids(tokens, self.phon_to_id)
+        
+        token_ids = self._tokenize(utterance, vowelizer=vowelizer, phonemize=phonemize)
+        
+        
         ids_batch = torch.LongTensor(token_ids).unsqueeze(0).to(self.device)
         sid = torch.LongTensor([speaker_id]).to(self.device)
         
@@ -141,8 +165,9 @@ class FastPitch(_FastPitch):
     def ttmel_batch(self,
                     batch: List[str],
                     speed: float = 1,
-                    speaker_id: int = 0,
+                    speaker_id: int = 0,                    
                     vowelizer: Optional[_VOWELIZER_TYPE] = None,
+                    phonemize: bool = True,
                     pitch_mul: float = 1.,           
                     pitch_add: float = 0.,
                     dur_tgt = None, 
@@ -152,14 +177,14 @@ class FastPitch(_FastPitch):
                     max_duration = 75,
                     ):
 
-        batch_tokens = [
-            self._tokenize(line, vowelizer=vowelizer) 
+        batch_ids = [
+            torch.LongTensor(self._tokenize(line, vowelizer=vowelizer, phonemize=phonemize))
             for line in batch
             ]
 
-        batch_ids = [torch.LongTensor(
-            text.tokens_to_ids(tokens, self.phon_to_id)
-            ) for tokens in batch_tokens]
+        # batch_ids = [torch.LongTensor(
+        #     text.tokens_to_ids(tokens, self.phon_to_id)
+        #     ) for tokens in batch_tokens]
 
         batch = text_collate_fn(batch_ids)
         (
@@ -200,6 +225,7 @@ class FastPitch(_FastPitch):
               speaker_id: int = 0,
               batch_size: int = 1,
               vowelizer: Optional[_VOWELIZER_TYPE] = None,
+              phonemize: bool = True,
               pitch_mul: float = 1.,
               pitch_add: float = 0.,
               ):
@@ -208,6 +234,7 @@ class FastPitch(_FastPitch):
             return self.ttmel_single(text_input, speed=speed, 
                                      speaker_id=speaker_id,
                                      vowelizer=vowelizer,
+                                     phonemize=phonemize,
                                      pitch_mul=pitch_mul, 
                                      pitch_add=pitch_add,
                                      )
@@ -222,6 +249,7 @@ class FastPitch(_FastPitch):
                 mel = self.ttmel_single(sample, speed=speed, 
                                         speaker_id=speaker_id,
                                         vowelizer=vowelizer,
+                                        phonemize=phonemize,
                                         pitch_mul=pitch_mul, 
                                         pitch_add=pitch_add,
                                         )
@@ -233,6 +261,7 @@ class FastPitch(_FastPitch):
             return self.ttmel_batch(batch, speed=speed, 
                                     speaker_id=speaker_id,
                                     vowelizer=vowelizer,
+                                    phonemize=phonemize,
                                     pitch_mul=pitch_mul, 
                                     pitch_add=pitch_add,
                                     )
@@ -245,6 +274,7 @@ class FastPitch(_FastPitch):
             mels = self.ttmel_batch(batch, speed=speed, 
                                     speaker_id=speaker_id,
                                     vowelizer=vowelizer,
+                                    phonemize=phonemize,
                                     pitch_mul=pitch_mul,
                                     pitch_add=pitch_add,
                                     )
@@ -298,14 +328,16 @@ class FastPitch2Wave(nn.Module):
                    text_buckw: str,
                    speed: float = 1,  
                    speaker_id: int = 0,
-                   denoise: float = 0,   
+                   denoise: float = 0,
                    vowelizer: Optional[_VOWELIZER_TYPE] = None,
+                   phonemize: bool = True,
                    pitch_mul: float = 1.,
                    pitch_add: float = 0.,                         
                    return_mel: bool = False):
 
         mel_spec = self.model.ttmel_single(text_buckw, speed, 
-                                           speaker_id, vowelizer,                                           
+                                           speaker_id, vowelizer,
+                                           phonemize=phonemize,                                          
                                            pitch_mul=pitch_mul, 
                                            pitch_add=pitch_add,)
           
@@ -326,13 +358,15 @@ class FastPitch2Wave(nn.Module):
                   speaker_id: int = 0,
                   denoise: float = 0,
                   vowelizer: Optional[_VOWELIZER_TYPE] = None,
+                  phonemize: bool = True,
                   pitch_mul: float = 1.,
                   pitch_add: float = 0.,
                   return_mel: bool = False
                   ):
 
         mel_list = self.model.ttmel_batch(batch, speed, 
-                                          speaker_id, vowelizer,                                          
+                                          speaker_id, vowelizer,
+                                          phonemize=phonemize,                                      
                                           pitch_mul=pitch_mul, 
                                           pitch_add=pitch_add,)
 
@@ -356,6 +390,7 @@ class FastPitch2Wave(nn.Module):
             speaker_id: int = 0,
             batch_size: int = 2,
             vowelizer: Optional[_VOWELIZER_TYPE] = None,
+            phonemize: bool = True,
             pitch_mul: float = 1.,
             pitch_add: float = 0.,        
             return_mel: bool = False
@@ -389,7 +424,8 @@ class FastPitch2Wave(nn.Module):
         if isinstance(text_input, str):
             return self.tts_single(text_input, speaker_id=speaker_id,
                                    speed=speed, denoise=denoise,
-                                   vowelizer=vowelizer,                                   
+                                   vowelizer=vowelizer, 
+                                   phonemize=phonemize,                                  
                                    pitch_mul=pitch_mul, 
                                    pitch_add=pitch_add, 
                                    return_mel=return_mel)
@@ -406,6 +442,7 @@ class FastPitch2Wave(nn.Module):
                                       pitch_mul=pitch_mul, 
                                       pitch_add=pitch_add,
                                       vowelizer=vowelizer,
+                                      phonemize=phonemize,
                                       return_mel=return_mel)
                 wav_list.append(wav)
             return wav_list
@@ -416,7 +453,8 @@ class FastPitch2Wave(nn.Module):
                                   speed=speed, denoise=denoise,
                                   pitch_mul=pitch_mul, 
                                   pitch_add=pitch_add,
-                                  vowelizer=vowelizer,                  
+                                  vowelizer=vowelizer,      
+                                  phonemize=phonemize,            
                                   return_mel=return_mel)
 
         # batched inference
@@ -427,8 +465,9 @@ class FastPitch2Wave(nn.Module):
             wavs = self.tts_batch(batch, speaker_id=speaker_id,
                                   speed=speed, denoise=denoise,
                                   pitch_mul=pitch_mul, 
-                                  pitch_add=pitch_add,
-                                  vowelizer=vowelizer,                          
+                                  pitch_add=pitch_add,                                  
+                                  vowelizer=vowelizer,     
+                                  phonemize=phonemize,                     
                                   return_mel=return_mel)
             wav_list += wavs
 
