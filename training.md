@@ -2,15 +2,15 @@
 
 ## Background
 
-Text &rarr; (Phonemes) &rarr; Token ids &rarr; Mel frames &rarr; Audio wave
+Text (&rarr; Phonemes) &rarr; Token ids &rarr; Mel frames &rarr; Audio wave
+Text (&rarr; Phonemizer) &rarr; Tokenizer &rarr; TTS (Mel output) &rarr; Vocoder &rarr; Audio wave
 
 A *tokenizer* maps the text or phonetic symbols to token ids. In this repo, this is implemented in the `/text` folder.
 A *phonemizer* can be helpful when pronunciation rules are difficult or to allow phoneme based manipulation. For MSA the pronunciation rules for diacritized text are not overly complicated (`text/phonetise_buckwalter.py`) such that a model can learn these from a sufficiently large dataset. 
 A *vowelizer* or *diacritizer* can try to estimate the diacrits but these are not perfect and only work for MSA.
 
 It is common to have two models, one that performs the *Token ids &rarr; Mel frames mapping* such as [Tacotron2](https://arxiv.org/abs/1712.05884) or [FastPitch](https://arxiv.org/abs/2006.06873) and a *vocoder* such as [Hifi-GAN](https://arxiv.org/abs/2010.05646) or [Vocos](https://arxiv.org/abs/2306.00814) that performs the *Mel frames &rarr; Audio wave* mapping. The advantage of this approach is that learning to map tokens to mel frames is easier / faster and the vocoder can be trained in a self-supervised manner. Different *Token &rarr; Mel* models can be combined with the same vocoder which offers some flexibility.
-A one-stage model like [VITS](https://arxiv.org/abs/2106.06103) marge these two stages and therefore avoids the mel spectrogram bottleneck but usually takes much longer to train as the the adversarial losses need to do a lot of work (as for the vocoder) and can need a larger dataset. It may depend on the use case which approach is preferred.
-
+A one-stage model like [VITS](https://arxiv.org/abs/2106.06103) merges these two stages and therefore avoids the mel spectrogram bottleneck but usually takes much longer to train, as the the adversarial losses need to do a lot of work (as for the vocoder), and may need a larger dataset. It may depend on the use case which approach is preferred.
 
 
 ## Config file
@@ -90,7 +90,7 @@ The script should also save a text file at `data/mean_std_....txt` with pitch me
 
 ## Training / Testing
 
-A checkpoint that was trained an raw input (the 4 speakers and [Common Voice Arabic](https://commonvoice.mozilla.org/en/datasets)) is `fastpitch_raw_ms.pth` on [Google drive](https://drive.google.com/drive/folders/1Ft2JOt47qNIQzu-Wz9Or5T0nXCc6N9IN?usp=sharing).
+A checkpoint that has been trained an raw input (the 4 speakers and [Common Voice Arabic](https://commonvoice.mozilla.org/en/datasets)) is `fastpitch_raw_ms.pth` on [Google drive](https://drive.google.com/drive/folders/1Ft2JOt47qNIQzu-Wz9Or5T0nXCc6N9IN?usp=sharing).
 
 Use `train_fp_adv.py` for training. I don't see a reason for training the Tacotron2 model, since the FastPitch model is better in every aspect I am aware of.
 
