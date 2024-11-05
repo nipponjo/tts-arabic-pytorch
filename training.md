@@ -3,6 +3,7 @@
 ## Background
 
 Text (&rarr; Phonemes) &rarr; Token ids &rarr; Mel frames &rarr; Audio wave
+
 Text (&rarr; Phonemizer) &rarr; Tokenizer &rarr; TTS (Mel output) &rarr; Vocoder &rarr; Audio wave
 
 A *tokenizer* maps the text or phonetic symbols to token ids. In this repo, this is implemented in the `/text` folder.
