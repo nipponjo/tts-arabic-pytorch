@@ -2,7 +2,8 @@
 [[Samples 1]](https://nipponjo.github.io/tts-arabic-samples) 
 [[Samples 2]](https://nipponjo.github.io/tts-arabic-speakers) 
 [[Package / ONNX models]](https://github.com/nipponjo/tts_arabic) 
-[[Flutter app]](https://github.com/nipponjo/tts-arabic-flutter) 
+[[Flutter app]](https://github.com/nipponjo/tts-arabic-flutter)
+[[arXiv]](https://arxiv.org/abs/2512.00937)
 
 TTS models (Tacotron2, FastPitch), trained on [Nawar Halabi](https://github.com/nawarhalabi)'s [Arabic Speech Corpus](http://en.arabicspeechcorpus.com/), including the [HiFi-GAN vocoder](https://github.com/jik876/hifi-gan) for direct TTS inference.
 
@@ -10,13 +11,19 @@ TTS models (Tacotron2, FastPitch), trained on [Nawar Halabi](https://github.com/
   <img src="https://user-images.githubusercontent.com/28433296/227660976-0d1e2033-276e-45e5-b232-a5a9b6b3f2a8.png" width="95%"></img>
 </div>
 
-Papers:
+**Publication**
+
+More information about this repository can also be found in the publication *Arabic TTS with FastPitch: Reproducible Baselines, Adversarial Training, and Oversmoothing Analysis* ([arXiv](https://arxiv.org/abs/2512.00937) | [ResearchGate](https://www.researchgate.net/publication/398225096_Arabic_TTS_with_FastPitch_Reproducible_Baselines_Adversarial_Training_and_Oversmoothing_Analysis)).
+
+**Related Papers**
 
 Tacotron2 | Natural TTS Synthesis by Conditioning WaveNet on Mel Spectrogram Predictions ([arXiv](https://arxiv.org/abs/1712.05884))
 
 FastPitch | FastPitch: Parallel Text-to-speech with Pitch Prediction ([arXiv](https://arxiv.org/abs/2006.06873))
 
 HiFi-GAN  | HiFi-GAN: Generative Adversarial Networks for Efficient and High Fidelity Speech Synthesis ([arXiv](https://arxiv.org/abs/2010.05646))
+
+
 
 ## Audio Samples
 
